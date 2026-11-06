@@ -1,0 +1,7 @@
+# Python virtual environment (each person makes their own with pip install)
+.venv/
+__pycache__/
+*.pyc
+
+# PyCharm settings (personal, not part of the project)
+.idea/

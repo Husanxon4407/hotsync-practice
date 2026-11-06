@@ -1,0 +1,520 @@
+/*
+  HotSync practice: style.css
+  All the looks of the page. Colours are "tokens" (named variables) on :root,
+  so light and dark mode only swap the token values, not the rules.
+  Chart colours were checked with a colour-blind safety validator.
+*/
+
+/* ============================================================ TOKENS */
+:root {
+  color-scheme: light;
+  --bg: #eef1f6;
+  --bg-glow-a: rgba(47, 91, 234, .16);
+  --bg-glow-b: rgba(232, 97, 58, .13);
+  --bg-glow-c: rgba(26, 158, 117, .12);
+  --card: rgba(255, 255, 255, .86);
+  --card-solid: #ffffff;
+  --card-hover: #ffffff;
+  --line: #dde2ea;
+  --line-strong: #c9d0dc;
+  --ink: #0f1115;
+  --ink2: #4a4f5c;
+  --muted: #6b7180;
+  --chip: #f2f4f8;
+  --shadow: 0 1px 2px rgba(15, 17, 21, .04), 0 8px 24px rgba(15, 17, 21, .06);
+  --shadow-lift: 0 2px 4px rgba(15, 17, 21, .05), 0 16px 40px rgba(15, 17, 21, .10);
+
+  /* series colours (identity) */
+  --modis: #2f5bea;
+  --viirs: #e8613a;
+  --harm: #1a9e75;
+  --brand: #2f5bea;
+
+  /* calendar ramp (magnitude): one hue family, light -> dark */
+  --r0: #eef1f6;          /* 0 fires */
+  --r1: #eea458;
+  --r2: #e8853f;
+  --r3: #d96132;
+  --r4: #b83f24;
+  --r5: #7f1f14;
+  --nodata-a: #e1e5ec;
+  --nodata-b: #f5f6f9;
+
+  /* chart chrome */
+  --grid: rgba(15, 17, 21, .07);
+  --axis: #6b7180;
+
+  /* prism: the rainbow light that a glass prism makes */
+  --prism: #5c7cf2, #9b6cff, #e8603a, #f5b14a, #22ad80, #5c7cf2;
+  --prism-strength: .55;
+  --prism-glow: 0 18px 60px -28px rgba(92, 124, 242, .35);
+
+  --radius: 16px;
+  --radius-sm: 10px;
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+
+/* Dark mode: when the computer is in dark mode (and the user did not pick light)… */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #080c17;
+    --bg-glow-a: rgba(92, 124, 242, .30);
+    --bg-glow-b: rgba(232, 96, 58, .22);
+    --bg-glow-c: rgba(155, 108, 255, .22);
+    --card: rgba(21, 26, 43, .70);
+    --card-solid: #151a2b;
+    --card-hover: rgba(27, 33, 54, .82);
+    --line: rgba(255, 255, 255, .09);
+    --line-strong: rgba(255, 255, 255, .16);
+    --ink: #eef1f8;
+    --ink2: #b4bccd;
+    --muted: #8a93a8;
+    --chip: rgba(255, 255, 255, .06);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+    --shadow-lift: 0 2px 6px rgba(0, 0, 0, .4), 0 20px 50px rgba(0, 0, 0, .5);
+    --modis: #5c7cf2;
+    --viirs: #e8603a;
+    --harm: #22ad80;
+    --brand: #6f8cff;
+    --r0: #1f2538;
+    --r1: #7d3a1b;
+    --r2: #ad4a20;
+    --r3: #dc6630;
+    --r4: #f39a55;
+    --r5: #ffcf86;
+    --nodata-a: #232a3f;
+    --nodata-b: #181d2e;
+    --grid: rgba(255, 255, 255, .07);
+    --axis: #8a93a8;
+    --prism-strength: 1;
+    --prism-glow: 0 24px 90px -24px rgba(155, 108, 255, .55), 0 0 50px -12px rgba(92, 124, 242, .45);
+  }
+}
+/* …or when the user clicked "dark" on the theme button */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #080c17;
+  --bg-glow-a: rgba(92, 124, 242, .30);
+  --bg-glow-b: rgba(232, 96, 58, .22);
+  --bg-glow-c: rgba(155, 108, 255, .22);
+  --card: rgba(21, 26, 43, .70);
+  --card-solid: #151a2b;
+  --card-hover: rgba(27, 33, 54, .82);
+  --line: rgba(255, 255, 255, .09);
+  --line-strong: rgba(255, 255, 255, .16);
+  --ink: #eef1f8;
+  --ink2: #b4bccd;
+  --muted: #8a93a8;
+  --chip: rgba(255, 255, 255, .06);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
+  --shadow-lift: 0 2px 6px rgba(0, 0, 0, .4), 0 20px 50px rgba(0, 0, 0, .5);
+  --modis: #5c7cf2;
+  --viirs: #e8603a;
+  --harm: #22ad80;
+  --brand: #6f8cff;
+  --r0: #1f2538;
+  --r1: #7d3a1b;
+  --r2: #ad4a20;
+  --r3: #dc6630;
+  --r4: #f39a55;
+  --r5: #ffcf86;
+  --nodata-a: #232a3f;
+  --nodata-b: #181d2e;
+  --grid: rgba(255, 255, 255, .07);
+  --axis: #8a93a8;
+  --prism-strength: 1;
+  --prism-glow: 0 24px 90px -24px rgba(155, 108, 255, .55), 0 0 50px -12px rgba(92, 124, 242, .45);
+}
+
+/* An animatable angle, so the prism border can spin */
+@property --angle {
+  syntax: "<angle>";
+  initial-value: 0deg;
+  inherits: false;
+}
+
+/* ============================================================ BASE */
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; scroll-padding-top: 140px; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 15px/1.55 "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+  transition: background-color .4s var(--ease), color .4s var(--ease);
+}
+button, select, input { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 6px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; color: var(--ink2); }
+
+/* Moving coloured light behind everything (the "aurora") */
+.aurora {
+  position: fixed; inset: -20vmax; z-index: -1; pointer-events: none;
+  background:
+    radial-gradient(40vmax 30vmax at 15% 20%, var(--bg-glow-a), transparent 60%),
+    radial-gradient(35vmax 28vmax at 85% 15%, var(--bg-glow-b), transparent 60%),
+    radial-gradient(45vmax 30vmax at 60% 90%, var(--bg-glow-c), transparent 60%);
+  filter: blur(20px);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+@keyframes drift {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(3vmax, -2vmax, 0) rotate(4deg); }
+  100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-3deg); }
+}
+
+/* ============================================================ HEADER */
+header.top {
+  position: sticky; top: 0; z-index: 1000;
+  display: flex; align-items: center; gap: 14px;
+  padding: 10px 24px;
+  background: color-mix(in srgb, var(--card-solid) 72%, transparent);
+  backdrop-filter: blur(14px) saturate(1.4);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  border-bottom: 1px solid var(--line);
+}
+.logo { height: 34px; width: 34px; border-radius: 9px; background: #fff; padding: 2px; }
+.brand { font-weight: 700; font-size: 18px; letter-spacing: -.01em; }
+.brand .prism-text {
+  background: linear-gradient(90deg, var(--prism));
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: slide 8s linear infinite;
+}
+@keyframes slide { to { background-position: 300% 0; } }
+.sub { color: var(--muted); font-size: 12.5px; }
+nav.sections { display: flex; gap: 4px; margin-left: auto; }
+nav.sections a {
+  color: var(--ink2); text-decoration: none; font-size: 13px;
+  padding: 6px 11px; border-radius: 999px;
+  transition: background .2s, color .2s;
+}
+nav.sections a:hover { background: var(--chip); color: var(--ink); }
+nav.sections a.active { background: var(--brand); color: #fff; }
+.icon-btn {
+  display: inline-grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--chip);
+  transition: transform .3s var(--ease), background .2s;
+}
+.icon-btn:hover { transform: rotate(-15deg) scale(1.06); }
+.icon-btn svg { width: 18px; height: 18px; }
+
+/* ============================================================ LAYOUT */
+main { max-width: 1320px; margin: 0 auto; padding: 22px 24px 40px; display: flex; flex-direction: column; gap: 22px; }
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1.45fr) minmax(0, 1fr); gap: 22px; }
+.grid-2.even { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+
+.card {
+  position: relative;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 18px 20px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(16px) saturate(1.3);
+  -webkit-backdrop-filter: blur(16px) saturate(1.3);
+  transition: transform .35s var(--ease), box-shadow .35s var(--ease), background .35s;
+}
+.card.lift:hover { transform: translateY(-3px); box-shadow: var(--shadow-lift); background: var(--card-hover); }
+
+/* Prism border: a spinning rainbow line around the card. In light mode it is
+   soft, in dark mode it glows. We draw it on ::before and cut out the middle
+   with a mask, so only the 1px border shows. */
+.prism::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+  background: conic-gradient(from var(--angle), var(--prism));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: calc(var(--prism-strength) * .9);
+  animation: spin 7s linear infinite;
+  pointer-events: none;
+}
+.prism { box-shadow: var(--shadow), var(--prism-glow); }  /* soft coloured glow around the card */
+.card.lift.prism-hover::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; padding: 1px;
+  background: conic-gradient(from var(--angle), var(--prism));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+  opacity: 0; transition: opacity .4s; animation: spin 5s linear infinite; pointer-events: none;
+}
+.card.lift.prism-hover:hover::before { opacity: calc(var(--prism-strength) * .9); }
+@keyframes spin { to { --angle: 360deg; } }
+
+h2 { font-size: 16px; margin: 0; font-weight: 650; letter-spacing: -.01em; display: flex; align-items: center; gap: 8px; }
+h2 .num { font-size: 11px; font-weight: 700; color: #fff; background: var(--brand); border-radius: 999px; width: 20px; height: 20px; display: inline-grid; place-items: center; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.card-head .hint { font-size: 12px; color: var(--muted); }
+
+/* ============================================================ HERO */
+.hero { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 28px; align-items: center; padding: 26px 28px; }
+.hero .kicker { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink2); background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 3px 10px; }
+.hero h1 { font-size: clamp(22px, 2.6vw, 32px); line-height: 1.2; margin: 0 0 10px; letter-spacing: -.02em; font-weight: 700; }
+.hero h1 .m { color: var(--modis); }
+.hero h1 .v { color: var(--viirs); }
+.hero h1 .h { color: var(--harm); }
+.hero p { margin: 0; color: var(--ink2); max-width: 60ch; }
+
+/* The exchange-rate picture: 1 blue ring = N orange dots */
+.exchange { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.exchange .eq { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; justify-content: center; }
+.ex-ring { width: 46px; height: 46px; border-radius: 50%; border: 4px solid var(--modis); box-shadow: 0 0 0 6px color-mix(in srgb, var(--modis) 14%, transparent); }
+.ex-sign { font-size: 28px; color: var(--muted); font-weight: 300; }
+.ex-dots { display: flex; gap: 8px; align-items: center; min-height: 46px; }
+.ex-dot { width: 22px; height: 22px; border-radius: 50%; background: var(--viirs); position: relative; overflow: hidden; animation: pop .5s var(--ease) both; }
+.ex-dot.part { background: color-mix(in srgb, var(--viirs) 22%, transparent); }
+.ex-dot.part i { position: absolute; inset: 0 auto 0 0; background: var(--viirs); }
+@keyframes pop { from { transform: scale(0); opacity: 0; } 70% { transform: scale(1.18); } to { transform: scale(1); opacity: 1; } }
+.ex-num { font-size: 44px; font-weight: 750; letter-spacing: -.03em; line-height: 1; }
+.ex-cap { font-size: 13px; color: var(--muted); max-width: 34ch; }
+
+/* ============================================================ KPI */
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.kpi { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px; }
+.kpi .ico { flex: none; width: 38px; height: 38px; border-radius: 12px; display: grid; place-items: center; background: color-mix(in srgb, var(--c, var(--brand)) 14%, transparent); color: var(--c, var(--brand)); }
+.kpi .ico svg { width: 20px; height: 20px; }
+.kpi .t { font-size: 12px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.kpi .n { font-size: 28px; font-weight: 700; letter-spacing: -.02em; line-height: 1.15; }
+.kpi .s { font-size: 12px; color: var(--ink2); }
+.kpi.clickable { cursor: pointer; }
+
+/* ============================================================ CONTROL BAR */
+.controls {
+  position: sticky; top: 64px; z-index: 900;
+  display: flex; align-items: center; gap: 14px 22px; flex-wrap: wrap;
+  padding: 12px 18px;
+}
+.ctrl { display: flex; align-items: center; gap: 8px; }
+.ctrl > .lbl { font-size: 12px; color: var(--muted); white-space: nowrap; }
+.ctrl select {
+  padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--card-solid);
+}
+.day-ctrl { flex: 1 1 320px; min-width: 260px; }
+.day-ctrl input[type=range] { flex: 1; accent-color: var(--brand); min-width: 100px; }
+.day-label { min-width: 92px; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 14px; }
+.play {
+  display: inline-flex; align-items: center; gap: 6px;
+  border: 0; border-radius: 999px; padding: 7px 14px;
+  background: var(--brand); color: #fff; font-weight: 600; font-size: 13px;
+  box-shadow: 0 4px 14px color-mix(in srgb, var(--brand) 40%, transparent);
+  transition: transform .2s var(--ease);
+}
+.play:hover { transform: translateY(-1px); }
+.play svg { width: 14px; height: 14px; }
+.ghost-btn {
+  border: 1px solid var(--line); background: var(--chip); border-radius: 999px;
+  padding: 6px 12px; font-size: 13px; transition: border-color .2s, background .2s;
+}
+.ghost-btn:hover { border-color: var(--brand); }
+.ghost-btn[disabled] { opacity: .45; cursor: default; border-color: var(--line); }
+
+/* Segmented control (pick one of several) */
+.seg { display: inline-flex; background: var(--chip); border: 1px solid var(--line); border-radius: 999px; padding: 3px; position: relative; }
+.seg button {
+  position: relative; z-index: 1; border: 0; background: none; padding: 5px 12px;
+  border-radius: 999px; font-size: 12.5px; color: var(--ink2); white-space: nowrap;
+  transition: color .25s;
+}
+.seg button[aria-pressed="true"] { color: #fff; }
+.seg .thumb {
+  position: absolute; z-index: 0; top: 3px; bottom: 3px; border-radius: 999px;
+  background: var(--brand); transition: left .35s var(--ease), width .35s var(--ease);
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--brand) 45%, transparent);
+}
+
+/* Sensor on/off pills */
+.toggle { display: inline-flex; align-items: center; gap: 7px; padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: var(--chip); font-size: 13px; user-select: none; cursor: pointer; transition: opacity .2s, border-color .2s; }
+.toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.toggle:has(input:not(:checked)) { opacity: .45; }
+.toggle:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+/* ============================================================ MAP */
+#map { height: 430px; border-radius: 12px; background: var(--chip); z-index: 0; }
+.leaflet-container { font: inherit; }
+/* Dark mode map: we keep the OpenStreetMap tiles but invert their colours */
+:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9) saturate(.6); }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9) saturate(.6); }
+}
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card-solid); color: var(--ink); box-shadow: var(--shadow-lift); }
+.leaflet-popup-content-wrapper { border-radius: 12px; }
+.leaflet-bar a { background: var(--card-solid); color: var(--ink); border-color: var(--line) !important; }
+.leaflet-control-attribution { background: color-mix(in srgb, var(--card-solid) 80%, transparent) !important; color: var(--muted); }
+.leaflet-control-attribution a { color: var(--brand); }
+.pop b { font-size: 14px; }
+.pop .row { display: flex; justify-content: space-between; gap: 16px; font-size: 12.5px; }
+/* glowing pulse on the dots of the selected day */
+.pulse { stroke: var(--viirs) !important; animation: glow 1.6s ease-in-out infinite; }
+@keyframes glow { 0%, 100% { stroke-opacity: .9; stroke-width: 1.5; } 50% { stroke-opacity: .35; stroke-width: 7; } }
+.legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--ink2); margin-top: 10px; flex-wrap: wrap; align-items: center; }
+.key { display: inline-flex; align-items: center; gap: 6px; }
+.dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; flex: none; }
+.ring { width: 11px; height: 11px; border-radius: 50%; display: inline-block; border: 2px solid var(--modis); flex: none; }
+.dash { width: 18px; height: 0; border-top: 2px dashed var(--harm); display: inline-block; }
+.line-key { width: 18px; height: 2px; display: inline-block; border-radius: 2px; }
+
+/* Day details next to the map */
+.day-card { display: flex; flex-direction: column; gap: 14px; }
+.day-title { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+.day-sub { font-size: 12.5px; color: var(--muted); margin-top: -10px; }
+.stat-rows { display: flex; flex-direction: column; gap: 10px; }
+.stat-row { display: grid; grid-template-columns: 130px minmax(0, 1fr) 56px; align-items: center; gap: 10px; font-size: 13px; }
+.stat-row .bar { height: 10px; border-radius: 0 4px 4px 0; background: var(--chip); overflow: hidden; }
+.stat-row .bar i { display: block; height: 100%; width: 0; border-radius: 0 4px 4px 0; transition: width .6s var(--ease); }
+.stat-row .val { text-align: right; font-weight: 600; }
+.stat-row .val.nd { font-weight: 400; color: var(--muted); font-style: italic; }
+.note-box { font-size: 13px; color: var(--ink2); background: var(--chip); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+.note-box b { color: var(--ink); }
+.day-nav { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+
+/* ============================================================ CHART */
+.chartbox { position: relative; height: 340px; }
+
+/* ============================================================ CALENDAR */
+.cal-scroll { overflow-x: auto; padding-bottom: 4px; }
+.cal { display: grid; gap: 4px; font-size: 11px; align-items: center; min-width: 640px; }
+.cal .h { color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.cal .h.sel { color: var(--brand); font-weight: 700; }
+.cal .rl { color: var(--ink2); font-size: 12.5px; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.cal .c {
+  aspect-ratio: 1; border-radius: 5px; border: 0; padding: 0;
+  background: var(--r0);
+  transition: background-color .5s var(--ease), transform .2s var(--ease), box-shadow .2s;
+  animation: pop .45s var(--ease) both;
+  animation-delay: calc(var(--i) * 12ms);
+}
+.cal .c:hover, .cal .c:focus-visible { transform: scale(1.25); z-index: 2; box-shadow: 0 4px 12px rgba(0, 0, 0, .25); }
+.cal .c.nodata { background: repeating-linear-gradient(45deg, var(--nodata-a) 0 3px, var(--nodata-b) 3px 6px); }
+.cal .c.sel { box-shadow: 0 0 0 2px var(--card-solid), 0 0 0 4px var(--brand); }
+.scale { display: flex; align-items: center; gap: 6px 12px; font-size: 12px; color: var(--muted); margin-top: 14px; flex-wrap: wrap; }
+.scale .s { width: 22px; height: 12px; border-radius: 3px; display: inline-block; vertical-align: -2px; margin-right: 4px; }
+
+/* Floating tooltip (used by the calendar and the ratio dots) */
+.tip {
+  position: fixed; z-index: 2000; pointer-events: none;
+  background: var(--card-solid); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 10px;
+  padding: 8px 11px; font-size: 12.5px; box-shadow: var(--shadow-lift);
+  opacity: 0; transform: translateY(4px); transition: opacity .15s, transform .15s;
+  max-width: 240px;
+}
+.tip.show { opacity: 1; transform: none; }
+.tip .tt { font-weight: 650; margin-bottom: 2px; }
+
+/* ============================================================ CLEANING FUNNEL */
+.funnel { display: flex; flex-direction: column; gap: 18px; }
+.f-sensor .f-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 8px; font-size: 13px; }
+.f-sensor .f-head b { font-size: 14px; }
+.f-row { display: grid; grid-template-columns: 150px minmax(0, 1fr) 92px; gap: 10px; align-items: center; font-size: 12.5px; margin-bottom: 6px; }
+.f-row .name { color: var(--ink2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.f-row .bar { height: 14px; background: var(--chip); border-radius: 0 4px 4px 0; overflow: hidden; }
+.f-row .bar i { display: block; height: 100%; width: 0; border-radius: 0 4px 4px 0; transition: width 1s var(--ease); transition-delay: calc(var(--i) * 120ms); }
+.f-row .val { text-align: right; font-variant-numeric: tabular-nums; }
+.f-row .val .rm { color: var(--muted); font-size: 11.5px; margin-left: 4px; }
+.f-row.final .name, .f-row.final .val { font-weight: 650; color: var(--ink); }
+
+/* ============================================================ RATIO CARD */
+.ratio-list { display: flex; flex-direction: column; gap: 8px; }
+.ratio-item {
+  display: grid; grid-template-columns: 170px minmax(0, 1fr) 48px; gap: 10px; align-items: center;
+  border: 1px solid transparent; border-radius: 10px; padding: 6px 8px; background: none; text-align: left;
+  font-size: 13px; transition: background .2s, border-color .2s;
+}
+.ratio-item:hover { background: var(--chip); }
+.ratio-item[aria-pressed="true"] { border-color: var(--brand); background: color-mix(in srgb, var(--brand) 10%, transparent); }
+.ratio-item .bar { height: 10px; background: var(--chip); border-radius: 0 4px 4px 0; overflow: hidden; }
+.ratio-item .bar i { display: block; height: 100%; width: 0; background: var(--muted); border-radius: 0 4px 4px 0; transition: width .8s var(--ease), background .3s; }
+.ratio-item[aria-pressed="true"] .bar i { background: var(--brand); }
+.ratio-item .val { text-align: right; font-weight: 650; }
+.ratio-why { margin-top: 12px; }
+.strip-wrap { margin-top: 16px; }
+.strip-wrap .lbl { font-size: 12.5px; color: var(--ink2); margin-bottom: 4px; }
+#strip { width: 100%; height: 124px; display: block; overflow: visible; }
+
+/* ============================================================ TABLE */
+.tablewrap { max-height: 380px; overflow: auto; border-radius: 10px; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+th { color: var(--muted); font-weight: 500; position: sticky; top: 0; background: var(--card-solid); z-index: 1; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.nd { color: var(--muted); font-style: italic; }
+tbody tr { cursor: pointer; transition: background .15s; }
+tbody tr:hover { background: var(--chip); }
+tbody tr.sel { background: color-mix(in srgb, var(--brand) 14%, transparent); }
+tbody tr.sel td:first-child { box-shadow: inset 3px 0 0 var(--brand); }
+
+/* ============================================================ STEPS */
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; counter-reset: s; }
+.step { position: relative; border: 1px solid var(--line); border-radius: 14px; padding: 14px 14px 14px; font-size: 13px; color: var(--ink2); background: var(--chip); }
+.step .si { width: 36px; height: 36px; border-radius: 11px; display: grid; place-items: center; margin-bottom: 8px; color: #fff; background: var(--c); box-shadow: 0 6px 16px color-mix(in srgb, var(--c) 40%, transparent); }
+.step .si svg { width: 19px; height: 19px; }
+.step b { display: block; font-size: 14px; color: var(--ink); margin-bottom: 2px; }
+.step:not(:last-child)::after {  /* the little arrow between steps */
+  content: "→"; position: absolute; right: -13px; top: 22px; color: var(--muted); font-size: 14px;
+}
+
+/* ============================================================ GLOSSARY "?" */
+.q {
+  position: relative; display: inline-grid; place-items: center;
+  width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--line-strong);
+  font-size: 10px; font-weight: 700; color: var(--muted); background: none; padding: 0; cursor: help;
+}
+.q:hover, .q:focus-visible { color: var(--brand); border-color: var(--brand); }
+
+/* ============================================================ FOOTER, TOAST, ERROR */
+footer { max-width: 1320px; margin: 0 auto; padding: 0 24px 34px; font-size: 12.5px; color: var(--muted); display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+footer a { color: var(--brand); }
+.kbd { font-family: ui-monospace, Consolas, monospace; font-size: 11px; border: 1px solid var(--line-strong); border-bottom-width: 2px; border-radius: 5px; padding: 0 5px; }
+.toast {
+  position: fixed; left: 50%; bottom: 24px; z-index: 3000;
+  transform: translate(-50%, 30px); opacity: 0;
+  background: var(--card-solid); color: var(--ink); border: 1px solid var(--line);
+  border-radius: 999px; padding: 10px 18px; box-shadow: var(--shadow-lift); font-size: 13.5px;
+  transition: transform .4s var(--ease), opacity .4s var(--ease);
+}
+.toast.show { transform: translate(-50%, 0); opacity: 1; }
+#error { display: none; padding: 14px 18px; border-radius: var(--radius); background: #fde8e4; color: #8a1d10; }
+#error code { background: rgba(0, 0, 0, .06); padding: 1px 5px; border-radius: 4px; }
+
+/* Sections slide up softly when they scroll into view */
+.reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* ============================================================ SMALL SCREENS */
+@media (max-width: 1080px) {
+  nav.sections { display: none; }
+  .grid-2, .grid-2.even, .hero { grid-template-columns: minmax(0, 1fr); }
+  .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .step:nth-child(2)::after { display: none; }
+}
+@media (max-width: 640px) {
+  header.top { padding: 10px 16px; }
+  header .sub { display: none; }
+  main { padding: 16px 16px 30px; gap: 16px; }
+  .controls { position: static; }
+  .day-ctrl { min-width: 0; flex-wrap: wrap; }
+  .day-ctrl input[type=range] { flex: 1 1 140px; }
+  .kpis, .steps { grid-template-columns: minmax(0, 1fr); }
+  .step::after { display: none; }
+  .f-row { grid-template-columns: 110px minmax(0, 1fr) 80px; }
+  .ratio-item { grid-template-columns: 120px minmax(0, 1fr) 42px; }
+  .stat-row { grid-template-columns: 110px minmax(0, 1fr) 48px; }
+  #map { height: 340px; }
+  .seg button { padding: 5px 9px; }
+  footer { padding: 0 16px 28px; }
+}
+
+/* People who turn off motion in their computer settings get a calm page */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; }
+}

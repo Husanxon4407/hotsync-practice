@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HotSync practice mockup</title>
+<!--
+  DESIGN MOCKUP (like a Figma frame, but in HTML).
+  This is NOT the real app. All numbers here are FAKE sample numbers.
+  Claude Code: copy the layout, colours and sections from here,
+  but get real numbers from the CSV files (see SPEC.md).
+-->
+<style>
+  :root{
+    --ink:#0f1115; --ink2:#4a4f5c; --muted:#8a8f9c;
+    --bg:#eef1f6; --card:#ffffff; --line:#dde2ea;
+    --blue:#2f5bea;        /* Capella blue, from the logo */
+    --modis:#2f5bea;       /* MODIS = blue */
+    --viirs:#e8613a;       /* VIIRS = orange */
+    --harm:#1a9e75;        /* harmonized = green */
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  header{display:flex;align-items:center;gap:14px;padding:14px 24px;background:var(--card);border-bottom:1px solid var(--line)}
+  header img{height:34px}
+  header .brand{font-weight:600;font-size:18px}
+  header .sub{color:var(--muted);font-size:13px}
+  header .tag{margin-left:auto;font-size:12px;background:#fff4e5;color:#8a4b00;padding:4px 10px;border-radius:20px}
+  main{display:grid;grid-template-columns:280px minmax(0,1fr);gap:20px;padding:20px 24px;max-width:1300px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px}
+  h2{font-size:15px;margin:0 0 10px;font-weight:600}
+  .label{font-size:12px;color:var(--muted);margin:12px 0 4px}
+  .file{display:flex;align-items:center;gap:8px;padding:8px 10px;border:1px dashed var(--line);border-radius:8px;font-size:13px;margin-bottom:8px}
+  .dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+  select,input[type=month]{width:100%;padding:7px 9px;border:1px solid var(--line);border-radius:8px;font:inherit;background:#fff}
+  .check{display:flex;gap:8px;align-items:center;font-size:13px;margin:6px 0}
+  button{font:inherit;border:0;border-radius:8px;padding:9px 14px;cursor:pointer}
+  .primary{background:var(--blue);color:#fff;width:100%;margin-top:14px}
+  .ghost{background:#fff;border:1px solid var(--line)}
+  .stack{display:flex;flex-direction:column;gap:20px}
+  .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px}
+  .kpi .n{font-size:26px;font-weight:600}
+  .kpi .t{font-size:12px;color:var(--muted)}
+  .row2{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:20px}
+  .map{height:300px;border-radius:8px;background:#e7ecf3;position:relative;overflow:hidden}
+  .map .note{position:absolute;left:10px;bottom:8px;font-size:12px;color:var(--ink2);background:#ffffffcc;padding:3px 8px;border-radius:6px}
+  .legend{display:flex;gap:14px;font-size:12px;color:var(--ink2);margin-top:8px;flex-wrap:wrap}
+  .cal{display:grid;grid-template-columns:130px repeat(30,minmax(0,1fr));gap:3px;font-size:11px;align-items:center}
+  .cal .h{color:var(--muted);text-align:center}
+  .cal .rl{color:var(--ink2);font-size:12px}
+  .cal .c{aspect-ratio:1;border-radius:3px}
+  .scale{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);margin-top:10px}
+  .scale span.s{width:22px;height:12px;border-radius:2px;display:inline-block}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)}
+  th{color:var(--muted);font-weight:500}
+  .steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+  .step{border:1px solid var(--line);border-radius:10px;padding:10px 12px;font-size:13px}
+  .step b{display:block;font-size:14px;margin-bottom:2px}
+  .between{display:flex;justify-content:space-between;align-items:center}
+</style>
+</head>
+<body>
+
+<!-- 1. HEADER: logo + project name -->
+<header>
+  <img src="assets/capella-mark.png" alt="Capella logo">
+  <div>
+    <div class="brand">HotSync</div>
+    <div class="sub">Fair fire calendar from MODIS + VIIRS · Team Capella</div>
+  </div>
+  <div class="tag">Practice mockup · sample numbers</div>
+</header>
+
+<main>
+  <!-- 2. LEFT PANEL: data files + filters -->
+  <aside class="stack">
+    <div class="card">
+      <h2>Data files</h2>
+      <div class="file"><span class="dot" style="background:var(--modis)"></span> MODIS · Uzbekistan · 1 month <span style="margin-left:auto;color:var(--muted)">412 rows</span></div>
+      <div class="file"><span class="dot" style="background:var(--viirs)"></span> VIIRS · Uzbekistan · 1 month <span style="margin-left:auto;color:var(--muted)">1,986 rows</span></div>
+
+      <div class="label">Area</div>
+      <select><option>All Uzbekistan</option><option>Karakalpakstan</option><option>Namangan</option><option>Draw on map…</option></select>
+
+      <div class="label">Month</div>
+      <input type="month" value="2026-10">
+
+      <div class="label">Cleaning</div>
+      <label class="check"><input type="checkbox" checked> Only vegetation fires (type = 0)</label>
+      <label class="check"><input type="checkbox" checked> Remove low confidence</label>
+      <label class="check"><input type="checkbox"> Day passes only</label>
+
+      <button class="primary">Show results</button>
+    </div>
+
+    <div class="card">
+      <h2>How we made it fair</h2>
+      <div style="font-size:13px;color:var(--ink2)">
+        This month VIIRS saw <b>4.8×</b> more hot spots than MODIS.
+        So 1 MODIS hot spot ≈ 4.8 VIIRS hot spots.
+        Harmonized MODIS = MODIS × 4.8.
+      </div>
+    </div>
+  </aside>
+
+  <section class="stack">
+    <!-- 3. KPI CARDS -->
+    <div class="kpis">
+      <div class="card kpi"><div class="t">MODIS hot spots (raw)</div><div class="n" style="color:var(--modis)">412</div></div>
+      <div class="card kpi"><div class="t">VIIRS hot spots (raw)</div><div class="n" style="color:var(--viirs)">1,986</div></div>
+      <div class="card kpi"><div class="t">Ratio VIIRS ÷ MODIS</div><div class="n">4.8×</div></div>
+      <div class="card kpi"><div class="t">Busiest day</div><div class="n">Oct 17</div></div>
+    </div>
+
+    <!-- 4. MAP + DAILY CHART -->
+    <div class="row2">
+      <div class="card">
+        <h2>Where the fires were</h2>
+        <div class="map" id="map">
+          <svg viewBox="0 0 400 300" width="100%" height="100%" id="mapsvg" aria-label="placeholder map with dots">
+            <path d="M40 90 L150 60 L260 80 L330 120 L370 170 L330 220 L230 230 L140 200 L70 170 Z" fill="#d7dee9" stroke="#b9c3d3"/>
+          </svg>
+          <div class="note">Real app: Leaflet map of Uzbekistan</div>
+        </div>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--modis)"></span> MODIS hot spot</span>
+          <span><span class="dot" style="background:var(--viirs)"></span> VIIRS hot spot</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Fires per day: before and after fixing</h2>
+        <svg viewBox="0 0 420 260" width="100%" id="linechart" aria-label="line chart placeholder"></svg>
+        <div class="legend">
+          <span><span class="dot" style="background:var(--modis)"></span> MODIS raw</span>
+          <span><span class="dot" style="background:var(--viirs)"></span> VIIRS raw</span>
+          <span><span class="dot" style="background:var(--harm)"></span> MODIS harmonized (×4.8)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. DAILY BURNING CALENDAR (practice version: days instead of years×months) -->
+    <div class="card">
+      <div class="between">
+        <h2>Burning calendar · October (days)</h2>
+        <span style="font-size:12px;color:var(--muted)">Real project: rows = years, columns = months</span>
+      </div>
+      <div class="cal" id="cal"></div>
+      <div class="scale">Few <span class="s" style="background:#fff3d6"></span><span class="s" style="background:#fdc97a"></span><span class="s" style="background:#f6894a"></span><span class="s" style="background:#d9452b"></span><span class="s" style="background:#8f1d1d"></span> Many</div>
+    </div>
+
+    <!-- 6. TABLE + DOWNLOAD -->
+    <div class="card">
+      <div class="between">
+        <h2>Daily numbers</h2>
+        <button class="ghost">⬇ Download CSV</button>
+      </div>
+      <table>
+        <thead><tr><th>Date</th><th>MODIS raw</th><th>VIIRS raw</th><th>MODIS harmonized</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+
+    <!-- 7. HOW IT WORKS strip -->
+    <div class="card">
+      <h2>How HotSync works</h2>
+      <div class="steps">
+        <div class="step"><b>1. Load</b>Read MODIS and VIIRS CSV files from NASA FIRMS</div>
+        <div class="step"><b>2. Clean</b>Keep real fires, remove low confidence</div>
+        <div class="step"><b>3. Make fair</b>Find VIIRS ÷ MODIS ratio, convert MODIS</div>
+        <div class="step"><b>4. Show</b>Map, calendar, chart, CSV download</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+/* FAKE sample data, only to draw the mockup. */
+const days = Array.from({length:30},(_,i)=>i+1);
+const modis = days.map(d=>Math.max(2,Math.round(10+6*Math.sin(d/4)+ (d>14&&d<20?14:0) + (d%5))));
+const viirs = modis.map((m,i)=>Math.round(m*4.8 + (i%3)*3));
+const harm  = modis.map(m=>Math.round(m*4.8));
+
+/* calendar */
+const colors=['#fff3d6','#fdc97a','#f6894a','#d9452b','#8f1d1d'];
+function col(v,max){return colors[Math.min(4,Math.floor(v/max*5))];}
+const cal=document.getElementById('cal');
+cal.innerHTML='<div></div>'+days.map(d=>`<div class="h">${d%5===1?d:''}</div>`).join('');
+[['MODIS raw',modis],['VIIRS raw',viirs],['MODIS harmonized',harm]].forEach(([name,arr])=>{
+  const max=Math.max(...viirs)+1;
+  cal.innerHTML+=`<div class="rl">${name}</div>`+arr.map((v,i)=>`<div class="c" title="Oct ${i+1}: ${v}" style="background:${col(v,max)}"></div>`).join('');
+});
+
+/* line chart */
+const svg=document.getElementById('linechart'); const W=420,H=260,P=30, max=Math.max(...viirs)*1.1;
+const x=i=>P+i*(W-2*P)/29, y=v=>H-P-v*(H-2*P)/max;
+const line=(arr,c,dash)=>`<polyline fill="none" stroke="${c}" stroke-width="2" ${dash?'stroke-dasharray="5 4"':''} points="${arr.map((v,i)=>x(i)+','+y(v)).join(' ')}"/>`;
+svg.innerHTML=`<line x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}" stroke="#c3c8d2"/>`+
+  line(modis,'#2f5bea')+line(viirs,'#e8613a')+line(harm,'#1a9e75',true)+
+  `<text x="${P}" y="${H-8}" font-size="11" fill="#8a8f9c">Oct 1</text><text x="${W-P-30}" y="${H-8}" font-size="11" fill="#8a8f9c">Oct 30</text>`;
+
+/* map dots */
+const ms=document.getElementById('mapsvg'); let s=7;
+const rnd=()=>{s=(s*9301+49297)%233280;return s/233280;};
+for(let i=0;i<70;i++){ms.innerHTML+=`<circle cx="${80+rnd()*260}" cy="${90+rnd()*120}" r="2.5" fill="#e8613a" opacity=".8"/>`;}
+for(let i=0;i<15;i++){ms.innerHTML+=`<circle cx="${80+rnd()*260}" cy="${90+rnd()*120}" r="4" fill="none" stroke="#2f5bea" stroke-width="1.5"/>`;}
+
+/* table: first 5 days */
+document.getElementById('tbody').innerHTML=days.slice(0,5).map((d,i)=>`<tr><td>2026-10-${String(d).padStart(2,'0')}</td><td>${modis[i]}</td><td>${viirs[i]}</td><td>${harm[i]}</td></tr>`).join('')+'<tr><td colspan="4" style="color:#8a8f9c">… 25 more days</td></tr>';
+</script>
+</body>
+</html>
