@@ -22,3 +22,11 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - 233 MODIS / 236 VIIRS country names (232 in both). No 2026 files yet (expected, Stage 6).
 - `download_firms.py` now validates each zip with `zipfile.is_zipfile`. README has the AI disclosure.
 - **Decision for Stage 2:** also store the sum of fire power (FRP) per cell per month (team approved).
+
+## 2026-11-14 ~17:30 · Stage 2: process Uzbekistan and check the science
+- New `countries.py` (+ `data/countries.geojson`, Natural Earth 1:50m, 236 shapes with FIRMS names; `assign_country(df)` for world files).
+- New `process_all.py --country/--all`: load from zips → clean → 0.1° grid (+ FRP sums) → monthly rates → H → validation → JSON + dots + check image.
+- **Team decisions:** static places also = any single year with ≥10 hot months, plus a ring of 8 neighbour squares (catches a new factory at 38.05N 67.27E);
+  Nov 2000–Jun 2002 (Terra only) use a separate Terra-only rate.
+- Uzbekistan: rates 3.1–9.1 (high May–Sep), hold-out error 18.8%, r = 0.934, bias +16.3%, LOYO 20%. July 2025: MODIS 232 / VIIRS 833 (prototype 225 / 807).
+- Outputs: `web/data/country/uzbekistan.json` 0.86 MB, `web/data/points/uzbekistan/` 8.8 MB, `D:\hotsync_data\checks\uzbekistan.png`.
