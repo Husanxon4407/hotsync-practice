@@ -67,6 +67,9 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
   Buttons: 1 day / 3 days / 7 days / 1 month, ◀ ▶ to move, MODIS (orange) and VIIRS (purple) on/off; calendar click shows that month.
   These dots are NASA pictures (raw, not cleaned) and can't be clicked; clickable live dots come in Stage 6.
 
+- Added a "Real fire numbers" row (like the first prototype): MODIS / VIIRS real detections after cleaning, busiest day (click → day view), fire strength (average FRP per detection).
+- Sharing: team decided to follow the plan and share the live site later (nothing pushed yet; GitHub still shows the old prototype). Note: Stage 6's robot runs on GitHub, so the branch will need to be pushed then (ask first).
+
 ---
 ## WHERE WE STOPPED (2026-11-14 ~23:30) — read this first after a restart
 **Done:** Stages 0–5 (+ the "every place the same" update), all committed on branch `full-history`. **Next:** Stage 6 (2026 data + GitHub robot every 6 h + live fires) — waiting for the team to type `go`.
