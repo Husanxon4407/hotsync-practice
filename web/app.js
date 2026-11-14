@@ -1,869 +1,968 @@
 /*
-  HotSync practice: app.js
-  Reads data/summary.json (made by process.py) and draws every section.
-  No numbers are typed in here: everything comes from the JSON.
+  HotSync: app.js  (Stage 4: website core)
 
-  The big idea of this file: ONE "state" object holds what the user picked
-  (which day, which ratio, which sensors). When something changes, we call
-  render(), and render() updates every section from the state.
-  So the map, chart, calendar and table always agree with each other.
+  Reads the files that process_all.py made:
+    data/countries.json          list of countries (for the country picker)
+    data/country/<slug>.json     one country: monthly totals, squares, daily
+    data/points/<slug>/<y>.csv   every fire dot (showcase countries only)
+  No numbers are typed in here: everything comes from those files.
+
+  The big idea: ONE "state" object holds what the user picked (country,
+  dates, area, calendar mode, day...). When something changes we call
+  render(), and render() updates every section from the state. So the map,
+  calendar, cards, table and downloads always agree with each other.
 */
+
+// ------------------------------------------------------------------ SETTINGS
+const DEFAULT_COUNTRY = "uzbekistan";
+const DEFAULT_FROM = "2001-01";
+const NORMAL_YEARS = [2001, 2025];          // "normal" = median of these years
+const SHOWCASE = new Set(["uzbekistan", "argentina"]);   // have fire dots
+const MAX_DOT_MONTHS = 3;                    // dots only for short periods
+const MAX_DOTS = 15000;                      // more than this: show a sample
+const MAX_DOT_YEARS_CSV = 3;                 // dots CSV: at most 3 years
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+
+// Colour ramps (ColorBrewer, colour-blind friendly).
+// Counts: YlOrRd, light yellow (few) -> dark red (many).
+const SEQ = ["#ffeda0", "#fed976", "#feb24c", "#fd8d3c", "#fc4e2a", "#e31a1c", "#bd0026", "#800026"];
+// Anomaly: blue (below normal) - white (normal) - red (above normal).
+const DIV = ["#2166ac", "#4393c3", "#92c5de", "#d1e5f0", "#f7f7f7", "#fddbc7", "#f4a582", "#d6604d", "#b2182b"];
+const DIV_EDGES = [-75, -50, -25, -10, 10, 25, 50, 100];   // % borders between DIV colours
 
 // ------------------------------------------------------------------ STATE
 const state = {
-  data: null,          // summary.json
-  ratioKey: "overlap", // which ratio method we use (changed by the buttons)
-  day: null,           // null = whole month, or index 0..30 of the day
-  show: { MODIS: true, VIIRS: true },
-  timer: null,         // the "Play" timer
+  countries: [],        // countries.json
+  cache: new Map(),     // slug -> country JSON (loaded once, kept in memory)
+  c: null,              // the country we show now
+  from: DEFAULT_FROM,   // date range 'YYYY-MM'
+  to: null,
+  area: null,           // null = whole country, or {feature, label, layer}
+  selCells: null,       // null = all squares, or Set of square keys inside the area
+  series: null,         // monthly numbers of the selection {modis, viirs, h, normal}
+  calMode: "harmonized",
+  squareMode: "harmonized",
+  period: { kind: "range" },   // what the map shows: range | {month: i} | {day}
+  day: null,            // 'YYYY-MM-DD' for the day view
+  dots: false,
 };
-
-// The 4 ratio methods. "why" explains each one in simple words.
-const RATIOS = [
-  { key: "total", short: "Total", name: "Total, all days",
-    why: (d) => `Adds up the whole month. But it also counts ${noDataText(d)}, when VIIRS sent <b>no data</b>, as if VIIRS saw nothing. So the rate comes out <b>too small</b>.` },
-  { key: "overlap", short: "Both days", name: "Total, days both saw fires",
-    why: (d) => `Adds up only the <b>${d.ratio.days_used} days</b> when both cameras saw fires. No-data days can't make it smaller, and the month total of harmonized MODIS matches VIIRS exactly. <b>Our main choice.</b>` },
-  { key: "median_daily", short: "Median", name: "Median of daily ratios",
-    why: () => `Takes every day's own ratio, sorts them and picks the <b>middle one</b>. One strange day (like 36 VIIRS vs 1 MODIS) can't pull it away. <b>The safest</b> against crazy days.` },
-  { key: "grid_cells", short: "Grid", name: "Grid cells (10 km squares)",
-    why: () => `Counts fire <b>places</b> (10 km squares), not dots. If VIIRS puts 5 dots on one fire, the square counts once. Close to the others here, because we already removed the factories with hundreds of dots.` },
-];
-
-// Nice names for the cleaning rules from process.py
-const RULE_NAMES = {
-  "type == 0": "Only vegetation fires",
-  "inside Uzbekistan box": "Inside Uzbekistan",
-};
-function ruleName(rule) {
-  if (RULE_NAMES[rule]) return RULE_NAMES[rule];
-  if (rule.startsWith("confidence")) return "Confident detections";
-  if (rule.startsWith("not at ")) return "Not a factory: " + rule.slice(7).replace(" site", "");
-  return rule;
-}
+const points = new Map();     // "slug/year" -> array of fire dots (CSV)
 
 // ------------------------------------------------------------------ HELPERS
 const $ = (id) => document.getElementById(id);
-const fmt = (n) => Number(n).toLocaleString("en-US");
-const fmt1 = (n) => (Math.round(n * 10) / 10).toLocaleString("en-US", { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-// We add T00:00 so the browser doesn't move the day because of time zones.
-const asDate = (d) => new Date(d + "T00:00");
-const shortDate = (d) => asDate(d).toLocaleDateString("en-US", { month: "short", day: "numeric" });
-const longDate = (d) => asDate(d).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" });
-const dayNum = (d) => Number(d.slice(8, 10));
+const fmt = (n) => (n === null || n === undefined ? "–" : Math.round(n).toLocaleString("en-US"));
 const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
 const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-function noDataText(d) {
-  const nd = d.no_data_days.viirs;
-  return nd.length ? nd.map(shortDate).join(", ") : "no days";
+// 12345 -> "12k" (short numbers that fit in a calendar cell)
+function compact(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "–";
+  const a = Math.abs(v);
+  if (a < 1000) return String(Math.round(v));
+  if (a < 10000) return (v / 1000).toFixed(1).replace(/\.0$/, "") + "k";
+  if (a < 1e6) return Math.round(v / 1000) + "k";
+  return (v / 1e6).toFixed(1).replace(/\.0$/, "") + "M";
 }
-function monthName(d) {
-  return asDate(d.month + "-01").toLocaleDateString("en-US", { month: "long", year: "numeric" });
-}
-// The ratio value we use right now
-const ratio = () => state.data.ratio[state.ratioKey];
-// Harmonized MODIS for one day = MODIS raw × ratio (we compute it here, so
-// the ratio buttons can change it live)
-const harm = (row) => (row.modis_raw === null ? null : Math.round(row.modis_raw * ratio() * 10) / 10);
-// Is this day's VIIRS / MODIS ratio defined? (both saw at least one fire)
-const dayRatio = (row) => (row.modis_raw > 0 && row.viirs_raw > 0 ? row.viirs_raw / row.modis_raw : null);
-
-// Numbers that count up from 0 when they first appear (feels alive)
-function countUp(el, to, { decimals = 0, suffix = "" } = {}) {
-  const show = (v) => (decimals ? v.toFixed(decimals) : fmt(Math.round(v))) + suffix;
-  if (reduceMotion) { el.textContent = show(to); return; }
-  const from = Number(el.dataset.now || 0);
-  const t0 = performance.now(), dur = 900;
-  const step = (t) => {
-    const k = Math.min(1, (t - t0) / dur);
-    const e = 1 - Math.pow(1 - k, 3); // ease-out: fast start, soft stop
-    el.textContent = show(from + (to - from) * e);
-    if (k < 1) requestAnimationFrame(step);
-  };
-  el.dataset.now = to;
-  requestAnimationFrame(step);
+const pct = (v) => {
+  if (v === null || v === undefined) return "n/a";
+  const r = Math.round(v);
+  return (r > 0 ? "+" : "") + r + "%";      // round first, so we never show "+0%"
+};
+const monthShort = (m) => `${MONTHS[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
+const monthLong = (m) => `${MONTHS_LONG[+m.slice(5, 7) - 1]} ${m.slice(0, 4)}`;
+// 1 -> "1st", 2 -> "2nd", 3 -> "3rd", 11 -> "11th", 22 -> "22nd"
+function ordinal(n) {
+  const s = ["th", "st", "nd", "rd"], v = n % 100;
+  return n + (s[(v - 20) % 10] || s[v] || s[0]);
 }
 
-// One floating tooltip, shared by the calendar, the ratio dots and the "?" buttons
+// Days: we count in UTC so time zones can't move a date by one day.
+const dayMs = 86400000;
+const toUTC = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10));
+const dateOf = (ms) => new Date(ms).toISOString().slice(0, 10);
+const dayIndex = (d) => Math.round((toUTC(d) - toUTC(state.c.days_start)) / dayMs);
+const dayAt = (i) => dateOf(toUTC(state.c.days_start) + i * dayMs);
+const longDate = (d) => new Date(toUTC(d)).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long", year: "numeric" });
+
+const median = (arr) => {
+  const a = arr.filter((x) => x !== null && !Number.isNaN(x)).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const k = Math.floor(a.length / 2);
+  return a.length % 2 ? a[k] : (a[k - 1] + a[k]) / 2;
+};
+
+// Colour class for a count. Map squares use a log scale (a few squares have
+// thousands of fires, most have a handful). The calendar uses a square-root
+// scale: it separates "a normal month" from "a terrible month" better.
+function seqClass(v, max, scale = "log") {
+  if (!(v > 0)) return -1;
+  if (!(max > 0)) return 0;
+  const t = scale === "sqrt" ? Math.sqrt(v / max) : Math.log1p(v) / Math.log1p(max);
+  return Math.min(SEQ.length - 1, Math.floor(t * SEQ.length));
+}
+function divClass(p) {
+  let k = 0;
+  while (k < DIV_EDGES.length && p >= DIV_EDGES[k]) k++;
+  return k;
+}
+
+// ------------------------------------------------------------------ TOOLTIP + TOAST
 const tip = $("tip");
 function showTip(html, x, y) {
   tip.innerHTML = html;
   tip.classList.add("show");
   const r = tip.getBoundingClientRect();
-  // keep it inside the window
-  const left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x - r.width / 2));
-  const top = y - r.height - 12 < 8 ? y + 18 : y - r.height - 12;
-  tip.style.left = left + "px";
-  tip.style.top = top + "px";
+  tip.style.left = Math.min(window.innerWidth - r.width - 8, Math.max(8, x - r.width / 2)) + "px";
+  tip.style.top = (y - r.height - 12 < 8 ? y + 18 : y - r.height - 12) + "px";
 }
 const hideTip = () => tip.classList.remove("show");
-window.addEventListener("scroll", hideTip, { passive: true }); // don't leave a tooltip floating
+window.addEventListener("scroll", hideTip, { passive: true });
 function tipFor(el, getHtml) {
   const at = (e) => {
     const b = el.getBoundingClientRect();
-    const x = e && e.clientX !== undefined && e.type.startsWith("mouse") ? e.clientX : b.left + b.width / 2;
-    const y = e && e.clientY !== undefined && e.type.startsWith("mouse") ? e.clientY : b.top;
-    showTip(getHtml(), x, y);
+    const mouse = e && e.type.startsWith("mouse");
+    showTip(getHtml(), mouse ? e.clientX : b.left + b.width / 2, mouse ? e.clientY : b.top);
   };
-  el.addEventListener("mouseenter", at);
-  el.addEventListener("mousemove", at);
-  el.addEventListener("focus", at);
-  el.addEventListener("mouseleave", hideTip);
-  el.addEventListener("blur", hideTip);
+  ["mouseenter", "mousemove", "focus"].forEach((ev) => el.addEventListener(ev, at));
+  ["mouseleave", "blur"].forEach((ev) => el.addEventListener(ev, hideTip));
 }
+document.querySelectorAll("[data-tip]").forEach((el) => tipFor(el, () => el.dataset.tip));
 
 function toast(msg) {
   const t = $("toast");
   t.textContent = msg;
   t.classList.add("show");
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => t.classList.remove("show"), 2600);
+  toast.timer = setTimeout(() => t.classList.remove("show"), 2800);
 }
+function setLoading(msg) { $("loading").textContent = msg || ""; }
+function showError(html) { const b = $("error"); b.style.display = "block"; b.innerHTML = html; }
 
 // ------------------------------------------------------------------ THEME
-// 3 modes: auto (follow the computer) → light → dark → auto …
 const THEME_ICONS = {
   auto: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg>',
   light: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
   dark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
 };
-function currentThemeMode() {
-  return document.documentElement.dataset.theme || "auto";
-}
+const themeMode = () => document.documentElement.dataset.theme || "auto";
 function setTheme(mode) {
   if (mode === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = mode;
   try { localStorage.setItem("hotsync-theme", mode); } catch (e) { /* ignore */ }
-  const btn = $("themeBtn");
-  btn.innerHTML = THEME_ICONS[mode];
-  btn.title = "Theme: " + mode + " (click to change)";
-  if (state.data) recolor(); // charts and map dots read colours from CSS
+  $("themeBtn").innerHTML = THEME_ICONS[mode];
+  $("themeBtn").title = "Theme: " + mode + " (click to change)";
+  if (state.c) recolor();
 }
 $("themeBtn").addEventListener("click", () => {
-  const next = { auto: "light", light: "dark", dark: "auto" }[currentThemeMode()];
+  const next = { auto: "light", light: "dark", dark: "auto" }[themeMode()];
   setTheme(next);
   toast(next === "auto" ? "Theme: follows your computer" : `Theme: ${next}`);
 });
-// If the computer switches light/dark while in "auto", follow it.
 matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
-  if (currentThemeMode() === "auto" && state.data) recolor();
+  if (themeMode() === "auto" && state.c) recolor();
 });
-setTheme(currentThemeMode());
+setTheme(themeMode());
+
+// ------------------------------------------------------------------ SEGMENTED BUTTONS
+function makeSeg(el, items, current, onPick) {
+  items.forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.textContent = label;
+    b.dataset.key = key;
+    b.setAttribute("aria-pressed", String(key === current));
+    b.addEventListener("click", () => { setSeg(el, key); onPick(key); });
+    el.appendChild(b);
+  });
+  requestAnimationFrame(() => moveThumb(el));
+}
+function setSeg(el, key) {
+  el.querySelectorAll("button").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
+  moveThumb(el);
+}
+function moveThumb(el) {
+  const b = el.querySelector('button[aria-pressed="true"]');
+  const t = el.querySelector(".thumb");
+  // left AND top: on a phone the buttons can wrap onto 2 lines
+  if (b && t) {
+    Object.assign(t.style, { left: b.offsetLeft + "px", width: b.offsetWidth + "px",
+      top: b.offsetTop + "px", height: b.offsetHeight + "px", bottom: "auto" });
+  }
+}
+window.addEventListener("resize", () => document.querySelectorAll(".seg").forEach(moveThumb));
 
 // ------------------------------------------------------------------ LOAD
-fetch("data/summary.json")
-  .then((res) => {
-    if (!res.ok) throw new Error("HTTP " + res.status);
-    return res.json();
-  })
-  .then(init)
-  .catch((err) => {
-    // Most common reason: the page was opened by double-click (file://).
-    const box = $("error");
-    box.style.display = "block";
-    box.innerHTML =
-      "<b>Could not load data/summary.json</b> (" + err.message + ").<br>" +
-      "1) Run <code>python process.py</code>. " +
-      "2) From the hotsync-practice folder run <code>python -m http.server 8000</code>. " +
-      "3) Open <code>http://localhost:8000/web/</code>.";
+async function getJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: HTTP ${res.status}`);
+  return res.json();
+}
+
+async function start() {
+  try {
+    setLoading("Loading the country list…");
+    state.countries = await getJSON("data/countries.json");
+  } catch (err) {
+    setLoading("");
+    showError("<b>Could not load the data</b> (" + err.message + ").<br>" +
+      "Open the site through a small server, not by double-clicking the file: " +
+      "in the <code>web</code> folder run <code>python -m http.server 8000</code>, " +
+      "then open <code>http://localhost:8000</code>.");
     console.error(err);
-  });
-
-function init(data) {
-  state.data = data;
-  if (data.ratio[data.ratio.used] !== undefined) state.ratioKey = data.ratio.used;
-
-  drawHeroStatic(data);
-  drawKpisStatic(data);
-  buildRatioButtons();
-  initMap(data);
-  buildChart(data);
-  buildCalendar(data);
-  buildFunnel(data);
-  buildRatioList();
-  buildTable(data);
-  wireControls(data);
+    return;
+  }
+  $("countryList").innerHTML = state.countries.map((c) => `<option value="${c.name}"></option>`).join("");
+  buildControls();
+  initMap();
+  buildDayChart();
   setupReveal();
   setupScrollSpy();
+  await chooseCountry(DEFAULT_COUNTRY);
+}
+
+// Load one country (only when it is chosen) and keep it in memory.
+async function chooseCountry(slug) {
+  const info = state.countries.find((c) => c.slug === slug);
+  if (!info) return;
+  $("countryInput").value = info.name;
+  let data = state.cache.get(slug);
+  if (!data) {
+    setLoading(`Loading ${info.name}…`);
+    try {
+      data = await getJSON(`data/country/${slug}.json`);
+    } catch (err) {
+      setLoading("");
+      toast(`Could not load ${info.name}`);
+      console.error(err);
+      return;
+    }
+    state.cache.set(slug, data);
+  }
+  setLoading("");
+  state.c = data;
+  const last = data.months[data.months.length - 1];
+  // Keep the user's dates if they still fit, otherwise use the default.
+  state.to = !state.to || state.to > last ? last : state.to;
+  if (state.from < data.months[0]) state.from = data.months[0];
+  state.day = dayAt(data.daily.modis.length - 1);   // latest day with data
+  state.period = { kind: "range" };
+  state.dots = false;
+  $("dotsToggle").checked = false;
+  clearArea(false);
+  setupDateInputs();
+  buildSquares();
+  fitCountry();
   render();
 }
 
-// ------------------------------------------------------------------ RENDER (everything that can change)
+// ------------------------------------------------------------------ CONTROLS
+function buildControls() {
+  // Country: pick from the list (typing filters it).
+  const input = $("countryInput");
+  const pick = () => {
+    const v = input.value.trim().toLowerCase();
+    const hit = state.countries.find((c) => c.name.toLowerCase() === v);
+    if (hit && (!state.c || hit.slug !== state.c.slug)) chooseCountry(hit.slug);
+  };
+  input.addEventListener("change", pick);
+  // Picking from the list fires "input" without a typing type: load at once.
+  // While the user is still typing ("Niger" -> "Nigeria") we wait for Enter.
+  input.addEventListener("input", (e) => { if (!e.inputType || e.inputType === "insertReplacementText") pick(); });
+  input.addEventListener("blur", () => { if (state.c) input.value = state.c.name; });
+  input.addEventListener("focus", () => input.select());
+
+  // Dates
+  const onDates = () => {
+    let a = $("fromMonth").value, b = $("toMonth").value;
+    if (!a || !b) return;
+    if (a > b) [a, b] = [b, a];   // the user swapped them: fix it quietly
+    state.from = a; state.to = b;
+    state.period = { kind: "range" };
+    render();
+  };
+  $("fromMonth").addEventListener("change", onDates);
+  $("toMonth").addEventListener("change", onDates);
+  $("allTimeBtn").addEventListener("click", () => {
+    const m = state.c.months;
+    state.from = DEFAULT_FROM < m[0] ? m[0] : DEFAULT_FROM;
+    state.to = m[m.length - 1];
+    state.period = { kind: "range" };
+    setupDateInputs();
+    render();
+  });
+  $("resetAreaBtn").addEventListener("click", () => { clearArea(true); render(); });
+
+  // Calendar mode + square mode
+  makeSeg($("calSeg"), [["harmonized", "Harmonized"], ["modis", "Raw MODIS"], ["viirs", "Raw VIIRS"], ["anomaly", "Anomaly"]],
+    state.calMode, (k) => { state.calMode = k; renderCalendar(); });
+  makeSeg($("squareSeg"), [["harmonized", "Harmonized"], ["modis", "MODIS"], ["viirs", "VIIRS"]],
+    state.squareMode, (k) => { state.squareMode = k; renderMap(); });
+
+  $("periodResetBtn").addEventListener("click", () => { state.period = { kind: "range" }; render(); });
+
+  // Lat/lon box
+  $("boxForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const w = +$("boxW").value, s = +$("boxS").value, east = +$("boxE").value, n = +$("boxN").value;
+    if (!(w < east) || !(s < n)) { toast("West must be smaller than East, and South smaller than North"); return; }
+    const layer = L.rectangle([[s, w], [n, east]], { color: "#2f5bea", weight: 2, fillOpacity: 0.05 });
+    useArea(layer, `Box ${w}, ${s}, ${east}, ${n}`);
+    map.fitBounds(layer.getBounds(), { padding: [20, 20] });
+  });
+
+  // Dots
+  $("dotsToggle").addEventListener("change", (e) => { state.dots = e.target.checked; renderDots(); });
+
+  // Day view
+  $("dayInput").addEventListener("change", (e) => {
+    if (!e.target.value) return;
+    state.day = clampDay(e.target.value);
+    renderDay();
+  });
+  $("dayPrev").addEventListener("click", () => stepDay(-1));
+  $("dayNext").addEventListener("click", () => stepDay(1));
+  $("dayDotsBtn").addEventListener("click", () => {
+    state.period = { kind: "day", day: state.day };
+    state.dots = true;
+    $("dotsToggle").checked = true;
+    renderMap();
+    $("where").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  });
+
+  // Downloads
+  $("dlMonthly").addEventListener("click", downloadMonthly);
+  $("dlPoints").addEventListener("click", downloadPoints);
+}
+
+function setupDateInputs() {
+  const m = state.c.months;
+  for (const id of ["fromMonth", "toMonth"]) {
+    $(id).min = m[0];
+    $(id).max = m[m.length - 1];
+  }
+  $("fromMonth").value = state.from;
+  $("toMonth").value = state.to;
+  const last = dayAt(state.c.daily.modis.length - 1);
+  $("dayInput").min = state.c.days_start;
+  $("dayInput").max = last;
+}
+
+// ------------------------------------------------------------------ SELECTION -> MONTHLY SERIES
+// Month index range [a, b] of the chosen dates.
+function rangeIdx() {
+  const m = state.c.months;
+  return [Math.max(0, m.indexOf(state.from)), Math.max(0, m.indexOf(state.to))];
+}
+
+// Monthly MODIS, VIIRS, harmonized for the selection (whole country or area),
+// plus the "normal" (median) for each calendar month over 2001-2025.
+function computeSeries() {
+  const c = state.c, n = c.months.length;
+  let modis, viirs, h;
+  if (!state.selCells) {
+    modis = c.totals.modis.slice();
+    viirs = c.totals.viirs.slice();
+    h = c.totals.harmonized.slice();
+  } else {
+    modis = new Array(n).fill(0); viirs = new Array(n).fill(0); h = new Array(n).fill(0);
+    for (const key of state.selCells) {
+      for (const r of c.cells[key]) { modis[r[0]] += r[1]; viirs[r[0]] += r[2]; h[r[0]] += r[3]; }
+    }
+    // VIIRS has no data before 2012: keep it "no data", not 0.
+    c.totals.viirs.forEach((v, i) => { if (v === null) viirs[i] = null; });
+    h = h.map((x) => Math.round(x * 10) / 10);
+  }
+  const normal = MONTHS.map((_, k) => median(c.months
+    .map((m, i) => [m, i])
+    .filter(([m]) => +m.slice(5, 7) === k + 1 && +m.slice(0, 4) >= NORMAL_YEARS[0] && +m.slice(0, 4) <= NORMAL_YEARS[1])
+    .map(([, i]) => h[i])));
+  state.series = { modis, viirs, h, normal };
+}
+const anomaly = (i) => {
+  const s = state.series, nm = s.normal[+state.c.months[i].slice(5, 7) - 1];
+  return nm > 0 ? ((s.h[i] - nm) / nm) * 100 : null;
+};
+
+// ------------------------------------------------------------------ RENDER
 function render() {
-  const d = state.data;
-  renderHero(d);
-  renderKpis(d);
-  renderControls(d);
-  renderMap(d);
-  renderDayCard(d);
-  renderChart(d);
-  renderCalendar(d);
-  renderRatioList(d);
-  drawStrip(d);
-  renderTable(d);
+  computeSeries();
+  renderHeader();
+  renderCards();
+  renderMap();
+  renderCalendar();
+  renderDay();
+  renderTable();
 }
 
 // When the theme changes, things drawn with JS colours must be repainted.
 function recolor() {
-  styleMarkers();
-  if (chart) { applyChartColors(); chart.update("none"); }
-  drawStrip(state.data);
+  renderMap();
+  applyDayChartColors();
 }
 
-// ------------------------------------------------------------------ HERO
-function drawHeroStatic(d) {
-  $("heroArea").textContent = d.area;
-  $("heroMonth").textContent = monthName(d);
-  const m = d.totals.modis_raw, v = d.totals.viirs_raw;
-  $("heroTitle").innerHTML =
-    `Same fires, two cameras: <span class="v">${fmt(v)}</span> vs <span class="m">${fmt(m)}</span>. HotSync makes them <span class="h">fair</span>.`;
-  $("heroText").innerHTML =
-    `In ${monthName(d)}, NASA satellites watched ${d.area}. After cleaning, the new <b>VIIRS</b> camera found ${fmt(v)} real fires, ` +
-    `but the old <b>MODIS</b> camera found only ${fmt(m)}. There weren't more fires: VIIRS just has sharper eyes (smaller pixels). ` +
-    `So we find the <b>exchange rate</b> between them, and turn MODIS numbers into "VIIRS-like" numbers.`;
+// "the United Kingdom", "the Netherlands", but "Brazil"
+const NEEDS_THE = /^(United|Netherlands|Philippines|Bahamas|Gambia|Maldives|Czech|Dominican|Central African|Democratic|Republic|Solomon|Marshall|Cayman|Falkland|Faeroe|British|Virgin|Comoros|Seychelles)/;
+const countryName = () => (NEEDS_THE.test(state.c.name) ? "the " + state.c.name : state.c.name);
+const areaName = () => (state.area ? `the drawn area in ${countryName()}` : countryName());
+
+function renderHeader() {
+  const c = state.c;
+  $("heroArea").textContent = state.area ? `${c.name} · ${state.area.label}` : c.name;
+  $("heroRange").textContent = `${monthShort(state.from)} – ${monthShort(state.to)}`;
+  $("areaChip").textContent = state.area ? state.area.label : "Whole country";
+  $("resetAreaBtn").hidden = !state.area;
+
+  // Exchange-rate picture: 1 MODIS ring = N VIIRS dots (average of 12 months)
+  const rates = Object.values(c.rates).map((r) => r.rate);
+  const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+  $("exNum").textContent = avg.toFixed(1);
+  const full = Math.min(12, Math.floor(avg)), part = avg - Math.floor(avg);
+  let dots = "";
+  for (let k = 0; k < full; k++) dots += `<span class="ex-dot" style="animation-delay:${k * 60}ms"></span>`;
+  if (part > 0.05 && full < 12) dots += `<span class="ex-dot part"><i style="width:${Math.round(part * 100)}%"></i></span>`;
+  $("exDots").innerHTML = dots;
+  $("exCap").innerHTML = `VIIRS hotspots for every 1 MODIS hotspot in ${c.name} (the "exchange rate", average of 12 months)` +
+    (c.rate_source === "global" ? ". <b>Few fires here, so we use the world median rate.</b>" : "");
 }
 
-function renderHero(d) {
-  const r = ratio();
-  // Only redraw the dots if the ratio changed (so they "pop" again)
-  if (renderHero.last !== r) {
-    renderHero.last = r;
-    const full = Math.floor(r), part = r - full;
-    let html = "";
-    for (let i = 0; i < full; i++) html += `<span class="ex-dot" style="animation-delay:${i * 90}ms"></span>`;
-    if (part > 0.05) html += `<span class="ex-dot part" style="animation-delay:${full * 90}ms"><i style="width:${Math.round(part * 100)}%"></i></span>`;
-    $("exDots").innerHTML = html;
-    countUp($("exNum"), r, { decimals: 2, suffix: "×" });
-    const name = RATIOS.find((x) => x.key === state.ratioKey).name.toLowerCase();
-    $("exCap").innerHTML = `1 MODIS hot spot ≈ <b>${r.toFixed(2)}</b> VIIRS hot spots<br><span class="muted">method: ${name}</span>`;
-  }
-}
+// ------------------------------------------------------------------ SUMMARY CARDS + SENTENCE
+function renderCards() {
+  const c = state.c, s = state.series, [a, b] = rangeIdx();
+  const idx = [];
+  for (let i = a; i <= b; i++) idx.push(i);
 
-// ------------------------------------------------------------------ KPI CARDS
-function drawKpisStatic(d) {
-  countUp($("kModis"), d.totals.modis_raw);
-  countUp($("kViirs"), d.totals.viirs_raw);
-  $("kModisS").textContent = `kept from ${fmt(d.files.modis_rows)} raw rows`;
-  $("kViirsS").textContent = `kept from ${fmt(d.files.viirs_rows)} raw rows`;
-  $("kBusy").textContent = shortDate(d.busiest_day);
-  $("kBusyS").textContent = `${d.busiest_day_viirs} VIIRS hot spots · click to see`;
-  const goBusy = () => selectDay(d.daily.findIndex((x) => x.date === d.busiest_day), true);
-  $("kBusyCard").addEventListener("click", goBusy);
-  $("kBusyCard").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); goBusy(); } });
-}
-function renderKpis(d) {
-  if (renderKpis.last === state.ratioKey) return;
-  renderKpis.last = state.ratioKey;
-  countUp($("kRatio"), ratio(), { decimals: 2, suffix: "×" });
-  const name = RATIOS.find((x) => x.key === state.ratioKey).short;
-  $("kRatioS").textContent = `VIIRS ÷ MODIS · method: ${name}`;
-}
+  // 1. Total harmonized
+  const total = idx.reduce((t, i) => t + (s.h[i] || 0), 0);
+  $("kTotal").textContent = compact(total);
+  $("kTotalS").textContent = `${fmt(total)} in ${idx.length} months`;
 
-// ------------------------------------------------------------------ CONTROLS
-function buildRatioButtons() {
-  const seg = $("ratioSeg");
-  for (const r of RATIOS) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.dataset.key = r.key;
-    b.textContent = r.short;
-    b.title = r.name;
-    b.addEventListener("click", () => setRatio(r.key));
-    seg.appendChild(b);
-  }
-}
-function setRatio(key) {
-  if (key === state.ratioKey) return;
-  state.ratioKey = key;
-  render();
-}
+  // 2. Busiest calendar month (average over the selected years)
+  const sums = new Array(12).fill(0), counts = new Array(12).fill(0);
+  idx.forEach((i) => { const k = +c.months[i].slice(5, 7) - 1; sums[k] += s.h[i] || 0; counts[k]++; });
+  const avgs = sums.map((x, k) => (counts[k] ? x / counts[k] : -1));
+  const busy = avgs.indexOf(Math.max(...avgs));
+  $("kBusy").textContent = MONTHS_LONG[busy];
+  $("kBusyS").textContent = `${fmt(avgs[busy])} hotspots on average`;
 
-function wireControls(d) {
-  const slider = $("daySlider");
-  slider.max = d.daily.length;
-  slider.addEventListener("input", () => {
-    stopPlay();
-    const v = Number(slider.value);
-    selectDay(v === 0 ? null : v - 1);
-  });
-  $("allBtn").addEventListener("click", () => { stopPlay(); selectDay(null); });
-  $("prevBtn").addEventListener("click", () => { stopPlay(); stepDay(-1); });
-  $("nextBtn").addEventListener("click", () => { stopPlay(); stepDay(1); });
-  $("playBtn").addEventListener("click", () => (state.timer ? stopPlay() : startPlay()));
+  // 3. Top 3 years (full years inside the range if possible)
+  const byYear = {};
+  idx.forEach((i) => { const y = c.months[i].slice(0, 4); (byYear[y] = byYear[y] || { t: 0, n: 0 }); byYear[y].t += s.h[i] || 0; byYear[y].n++; });
+  let years = Object.entries(byYear).filter(([, v]) => v.n === 12);
+  if (years.length < 3) years = Object.entries(byYear);
+  years.sort((x, y) => y[1].t - x[1].t);
+  const top = years.slice(0, 3);
+  $("kTop").textContent = top.map(([y]) => y).join(" · ");
+  $("kTopS").textContent = top.map(([, v]) => compact(v.t)).join(" · ") + " hotspots";
 
-  for (const [id, s] of [["showModis", "MODIS"], ["showViirs", "VIIRS"]]) {
-    $(id).addEventListener("change", (e) => { state.show[s] = e.target.checked; render(); });
-  }
+  // 4. Latest complete month vs its normal (+ rank among the same month)
+  const li = c.months.length - 1, lm = c.months[li], k = +lm.slice(5, 7) - 1;
+  const an = anomaly(li);
+  const same = c.months.map((m, i) => [m, i]).filter(([m]) => +m.slice(5, 7) === k + 1 && m >= "2001-01");
+  const rank = 1 + same.filter(([, i]) => s.h[i] > s.h[li]).length;
+  $("kLatest").textContent = pct(an);
+  $("kLatestS").textContent = `${monthLong(lm)}: ${ordinal(rank)} highest ${MONTHS_LONG[k]} since 2001`;
 
-  // Keyboard: ← → change day, Esc = whole month
-  document.addEventListener("keydown", (e) => {
-    const tag = (e.target.tagName || "").toLowerCase();
-    if (["input", "select", "textarea"].includes(tag)) return;
-    if (e.key === "ArrowRight") { stopPlay(); stepDay(1); e.preventDefault(); }
-    else if (e.key === "ArrowLeft") { stopPlay(); stepDay(-1); e.preventDefault(); }
-    else if (e.key === "Escape") { stopPlay(); selectDay(null); }
-  });
-
-  // "?" buttons: show their explanation
-  document.querySelectorAll(".q").forEach((q) => {
-    tipFor(q, () => q.dataset.tip);
-    // Phones have no mouse hover, so a tap opens the explanation too.
-    q.addEventListener("click", (e) => {
-      e.stopPropagation();
-      const b = q.getBoundingClientRect();
-      showTip(q.dataset.tip, b.left + b.width / 2, b.top);
-    });
-  });
-  // A tap anywhere else closes it again
-  document.addEventListener("click", (e) => { if (!e.target.closest(".q")) hideTip(); });
-
-  $("download").addEventListener("click", downloadCsv);
+  // Sentence built from the numbers
+  const firstYear = c.months[a].slice(0, 4);
+  let text = `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> is usually the busiest month. `;
+  if (top.length) text += `<b>${top[0][0]}</b> had the most fires since ${firstYear}. `;
+  text += an === null
+    ? `${monthLong(lm)} has no normal to compare with (almost no fires in past ${MONTHS_LONG[k]}s).`
+    : Math.abs(Math.round(an)) < 1
+      ? `${monthLong(lm)} was <b>about normal</b>.`
+      : `${monthLong(lm)} was <b>${Math.abs(Math.round(an))}% ${an >= 0 ? "above" : "below"} normal</b>.`;
+  $("summary").innerHTML = text;
+  $("heroTitle").innerHTML = `${compact(total)} fair-to-compare hotspots in ${state.area ? "your area" : countryName()}, ${monthShort(state.from)} – ${monthShort(state.to)}`;
 }
-
-function selectDay(i, scrollToMap = false) {
-  state.day = i;
-  render();
-  if (scrollToMap) $("where").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "start" });
-}
-function stepDay(delta) {
-  const n = state.data.daily.length;
-  if (state.day === null) selectDay(delta > 0 ? 0 : n - 1);
-  else selectDay(Math.min(n - 1, Math.max(0, state.day + delta)));
-}
-
-// Play: walk through the month, one day every 0.9 seconds
-function startPlay() {
-  const n = state.data.daily.length;
-  if (state.day === null || state.day >= n - 1) selectDay(0);
-  state.timer = setInterval(() => {
-    if (state.day >= n - 1) { stopPlay(); return; }
-    selectDay(state.day + 1);
-  }, 900);
-  renderControls(state.data);
-}
-function stopPlay() {
-  if (!state.timer) return;
-  clearInterval(state.timer);
-  state.timer = null;
-  renderControls(state.data);
-}
-
-function renderControls(d) {
-  $("daySlider").value = state.day === null ? 0 : state.day + 1;
-  $("dayLabel").textContent = state.day === null ? "Whole month" : shortDate(d.daily[state.day].date);
-  $("allBtn").disabled = state.day === null;
-  $("playBtn").innerHTML = state.timer
-    ? '<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg> Pause'
-    : '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M7 5v14l12-7z"/></svg> Play month';
-  // segmented control: mark the active button and slide the "thumb" under it
-  const seg = $("ratioSeg");
-  let active = null;
-  seg.querySelectorAll("button").forEach((b) => {
-    const on = b.dataset.key === state.ratioKey;
-    b.setAttribute("aria-pressed", on);
-    if (on) active = b;
-  });
-  if (active) {
-    const thumb = seg.querySelector(".thumb");
-    thumb.style.left = active.offsetLeft + "px";
-    thumb.style.width = active.offsetWidth + "px";
-  }
-}
-window.addEventListener("resize", () => state.data && renderControls(state.data));
 
 // ------------------------------------------------------------------ MAP
-let map, markers = [];
-function initMap(d) {
-  // scrollWheelZoom off: scrolling the page doesn't zoom the map by mistake
-  map = L.map("map", { scrollWheelZoom: false, zoomSnap: 0.25 }).setView([41.4, 64.6], 6);
-  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+let map, squareLayer, dotLayer, drawnGroup, renderer;
+const squares = new Map();      // key -> Leaflet rectangle
+
+function initMap() {
+  renderer = L.canvas({ padding: 0.5 });    // canvas = fast with many shapes
+  // scrollWheelZoom off at first: scrolling the PAGE over the map must not
+  // zoom the map. A click on the map turns wheel zoom on; leaving turns it off.
+  map = L.map("map", { preferCanvas: true, zoomSnap: 0.5, worldCopyJump: true, scrollWheelZoom: false }).setView([41.4, 64.6], 5);
+  map.on("click", () => map.scrollWheelZoom.enable());
+  map.on("mouseout", () => map.scrollWheelZoom.disable());
+  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
-    attribution: "© OpenStreetMap",
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
+  squareLayer = L.layerGroup().addTo(map);
+  dotLayer = L.layerGroup().addTo(map);
+  drawnGroup = L.featureGroup().addTo(map);
 
-  // Draw VIIRS first and MODIS on top, so the rings are not hidden under dots
-  const sorted = [...d.points].sort((a, b) => (a.sensor === "VIIRS" ? -1 : 1) - (b.sensor === "VIIRS" ? -1 : 1));
-  for (const p of sorted) {
-    const isModis = p.sensor === "MODIS";
-    // MODIS = bigger empty ring (its pixel is bigger), VIIRS = small dot
-    const m = L.circleMarker([p.lat, p.lon], { radius: isModis ? 6.5 : 4, weight: isModis ? 2 : 1.5 });
-    const time = p.time.slice(0, 2) + ":" + p.time.slice(2) + " UTC";
-    m.bindPopup(
-      `<div class="pop"><b style="color:var(--${isModis ? "modis" : "viirs"})">${p.sensor}</b>` +
-      `<div class="row"><span class="muted">Date</span><span>${shortDate(p.date)}, ${time}</span></div>` +
-      `<div class="row"><span class="muted">Fire power (FRP)</span><span>${p.frp} MW</span></div>` +
-      `<div class="row"><span class="muted">Place</span><span>${p.lat.toFixed(3)}, ${p.lon.toFixed(3)}</span></div></div>`
-    );
-    markers.push({ m, p });
-  }
-  styleMarkers();
-
-  // Zoom so all dots fit (many fires are far east, in the Fergana valley)
-  if (d.points.length) map.fitBounds(d.points.map((p) => [p.lat, p.lon]), { padding: [20, 20] });
-}
-function styleMarkers() {
-  const cM = css("--modis"), cV = css("--viirs"), surf = css("--card-solid");
-  for (const { m, p } of markers) {
-    if (p.sensor === "MODIS") m.setStyle({ color: cM, fill: false, opacity: 1 });
-    else m.setStyle({ color: surf, fillColor: cV, fillOpacity: 0.88, opacity: 0.9 }); // thin surface ring separates dots
-  }
-}
-function renderMap(d) {
-  const date = state.day === null ? null : d.daily[state.day].date;
-  let shown = 0;
-  for (const { m, p } of markers) {
-    const on = state.show[p.sensor] && (date === null || p.date === date);
-    if (on && !map.hasLayer(m)) m.addTo(map);
-    if (!on && map.hasLayer(m)) m.remove();
-    if (on) {
-      shown++;
-      const el = m.getElement();
-      if (el) el.classList.toggle("pulse", date !== null && p.sensor === "VIIRS");
-    }
-  }
-  $("mapHint").textContent = (date === null ? "Whole month" : shortDate(date)) + ` · ${fmt(shown)} dots · click one for details`;
+  // Drawing tools (Leaflet-Geoman): rectangle, polygon, edit, delete.
+  map.pm.addControls({
+    position: "topleft", drawMarker: false, drawCircleMarker: false, drawPolyline: false,
+    drawCircle: false, drawText: false, cutPolygon: false, rotateMode: false, dragMode: false,
+    drawRectangle: true, drawPolygon: true, editMode: true, removalMode: true,
+  });
+  map.pm.setPathOptions({ color: "#2f5bea", weight: 2, fillOpacity: 0.05 });
+  map.on("pm:create", (e) => useArea(e.layer, e.shape === "Rectangle" ? "Drawn box" : "Drawn shape"));
+  map.on("pm:remove", (e) => { if (state.area && e.layer === state.area.layer) { clearArea(true); render(); } });
 }
 
-// ------------------------------------------------------------------ DAY CARD
-function renderDayCard(d) {
-  const i = state.day;
-  const rows = [];
-  let title, sub, note;
+function fitCountry() {
+  const [w, s, e, n] = state.c.bbox;
+  if (e - w <= 180) { map.fitBounds([[s, w], [n, e]], { padding: [10, 10] }); return; }
+  // Countries across the 180° line (Russia, Fiji...) have a box around the
+  // whole world. Zoom to the half (east or west) that has most fire squares.
+  const rects = [...squares.values()];
+  const east = rects.filter((r) => r.getBounds().getCenter().lng >= 0);
+  const west = rects.filter((r) => r.getBounds().getCenter().lng < 0);
+  const side = east.length >= west.length ? east : west;
+  map.fitBounds(side.length ? L.featureGroup(side).getBounds() : [[s, w], [n, e]], { padding: [10, 10] });
+}
 
-  if (i === null) {
-    const hm = d.daily.reduce((s, r) => s + (harm(r) || 0), 0);
-    title = "Whole month";
-    sub = `${monthName(d)} · ${d.daily.length} days`;
-    rows.push(["MODIS raw", d.totals.modis_raw, "--modis"]);
-    rows.push(["VIIRS raw", d.totals.viirs_raw, "--viirs"]);
-    rows.push(["MODIS harmonized", Math.round(hm), "--harm"]);
-    note = `VIIRS sent no data on <b>${noDataText(d)}</b>. Harmonized MODIS fills those gaps. ` +
-      `Press <b>▶ Play month</b> or click any day in the calendar to explore.`;
-  } else {
-    const r = d.daily[i];
-    const h = harm(r);
-    const dr = dayRatio(r);
-    title = longDate(r.date);
-    rows.push(["MODIS raw", r.modis_raw, "--modis"]);
-    rows.push(["VIIRS raw", r.viirs_raw, "--viirs"]);
-    rows.push(["MODIS harmonized", h, "--harm"]);
+// One rectangle per square (built once per country, re-coloured on change).
+function buildSquares() {
+  squareLayer.clearLayers();
+  squares.clear();
+  const cs = state.c.cell_size;
+  for (const key of Object.keys(state.c.cells)) {
+    const [i, j] = key.split("_").map(Number);
+    const rect = L.rectangle([[i * cs, j * cs], [(i + 1) * cs, (j + 1) * cs]],
+      { renderer, weight: 0.4, color: "#ffffff", fillOpacity: 0.85 });
+    rect.on("click", (e) => squarePopup(key, e.latlng));
+    squares.set(key, rect);
+    rect.addTo(squareLayer);
+  }
+}
 
-    // strongest fire of the day (by fire power)
-    const pts = d.points.filter((p) => p.date === r.date);
-    const top = pts.reduce((a, p) => (!a || p.frp > a.frp ? p : a), null);
-    sub = top ? `Strongest fire: ${top.frp} MW (${top.sensor}) at ${top.lat.toFixed(2)}, ${top.lon.toFixed(2)}` : "No fires on this day";
+// Month index range the map shows.
+function mapRange() {
+  const p = state.period, m = state.c.months;
+  if (p.kind === "month") return [p.mi, p.mi];
+  if (p.kind === "day") { const i = m.indexOf(p.day.slice(0, 7)); return [i, i]; }
+  return rangeIdx();
+}
+const FIELD = { modis: 1, viirs: 2, harmonized: 3 };
 
-    if (r.viirs_raw === null) {
-      note = `VIIRS sent <b>no data</b> this day (not 0 fires!). Our best guess from MODIS: about <b>${fmt1(h)}</b> VIIRS-like fires.`;
-    } else if (r.modis_raw === 0 && r.viirs_raw > 0) {
-      note = `MODIS saw <b>0</b>, VIIRS saw <b>${r.viirs_raw}</b>. These fires were too small for MODIS's big 1 km pixels.`;
-    } else if (r.viirs_raw < r.modis_raw) {
-      note = `Rare day: <b>MODIS saw more</b>. The satellites pass at different times, so a short fire can be seen by only one of them.`;
-    } else if (dr !== null) {
-      const off = h - r.viirs_raw;
-      note = `VIIRS saw <b>${dr.toFixed(1)}×</b> more than MODIS today (month rate ${ratio().toFixed(2)}). ` +
-        `Harmonized guess ${fmt1(h)} vs real ${r.viirs_raw}: off by ${off > 0 ? "+" : ""}${fmt1(off)}. Single days are noisy; months are stable.`;
-    } else {
-      note = "No fires from either camera this day.";
-    }
+// Sum of one square over the map months: [modis, viirs, h]
+function squareSum(key, a, b) {
+  const out = [0, 0, 0];
+  for (const r of state.c.cells[key]) {
+    if (r[0] >= a && r[0] <= b) { out[0] += r[1]; out[1] += r[2]; out[2] += r[3]; }
+  }
+  return out;
+}
+
+function renderMap() {
+  if (!state.c) return;
+  const [a, b] = mapRange(), f = FIELD[state.squareMode] - 1;
+  const vals = new Map();
+  let max = 0;
+  for (const key of squares.keys()) {
+    const v = squareSum(key, a, b)[f];
+    vals.set(key, v);
+    if ((!state.selCells || state.selCells.has(key)) && v > max) max = v;
+  }
+  const edge = css("--card-solid") || "#fff";
+  for (const [key, rect] of squares) {
+    const v = vals.get(key), k = seqClass(v, max);
+    const inside = !state.selCells || state.selCells.has(key);
+    rect.setStyle(k < 0
+      ? { fillOpacity: 0, opacity: 0 }
+      : { fillColor: SEQ[k], color: edge, opacity: inside ? 0.6 : 0.1, fillOpacity: inside ? 0.85 : 0.15 });
   }
 
-  $("dTitle").textContent = title;
-  $("dSub").textContent = sub;
-  $("dNote").innerHTML = note;
-  const max = Math.max(1, ...rows.map((x) => x[1] || 0));
-  $("dStats").innerHTML = rows.map(([name, v, c]) =>
-    `<div class="stat-row"><span>${name}</span>` +
-    `<span class="bar"><i style="background:var(${c});width:${v === null ? 0 : (v / max) * 100}%"></i></span>` +
-    (v === null ? `<span class="val nd">no data</span>` : `<span class="val">${Number.isInteger(v) ? fmt(v) : fmt1(v)}</span>`) +
-    `</div>`).join("");
-  $("prevBtn").disabled = i === 0;
-  $("nextBtn").disabled = i === d.daily.length - 1;
+  // "The map shows ..." text
+  const p = state.period, m = state.c.months;
+  $("mapPeriod").textContent = p.kind === "range" ? `${monthShort(m[a])} – ${monthShort(m[b])} (sum)`
+    : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`;
+  $("periodResetBtn").hidden = p.kind === "range";
+
+  // Legend
+  const sq = { harmonized: "harmonized", modis: "raw MODIS", viirs: "raw VIIRS" }[state.squareMode];
+  let leg = `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} hotspots per ${state.c.cell_size}° square (1 → ${compact(max)})</span>`;
+  if (state.selCells) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
+  if (SHOWCASE.has(state.c.slug)) {
+    leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS dot</span>`;
+    leg += `<span class="key"><span class="dot" style="background:var(--viirs)"></span> VIIRS dot</span>`;
+  }
+  $("mapLegend").innerHTML = leg;
+
+  renderAreaStats(a, b);
+  renderDots();
 }
 
-// ------------------------------------------------------------------ LINE CHART
-let chart;
-function chartColors() {
-  return { modis: css("--modis"), viirs: css("--viirs"), harm: css("--harm"), grid: css("--grid"), axis: css("--axis"), ink: css("--ink"), ink2: css("--ink2"), brand: css("--brand"), surface: css("--card-solid"), line: css("--line") };
+function squarePopup(key, latlng) {
+  const [a, b] = mapRange(), m = state.c.months, cs = state.c.cell_size;
+  const [i, j] = key.split("_").map(Number);
+  const [mo, vi, h] = squareSum(key, a, b);
+  const lat = (x) => `${Math.abs(x).toFixed(2)}°${x >= 0 ? "N" : "S"}`;
+  const lon = (x) => `${Math.abs(x).toFixed(2)}°${x >= 0 ? "E" : "W"}`;
+  const viirsNote = m[b] < "2012-01" ? "no data (before 2012)" : fmt(vi);
+  L.popup().setLatLng(latlng).setContent(
+    `<div class="pop"><b>Square ${lat(i * cs)}–${lat((i + 1) * cs)}, ${lon(j * cs)}–${lon((j + 1) * cs)}</b>
+     <div class="small">${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}</div>
+     <div class="row"><span>MODIS raw</span><b>${fmt(mo)}</b></div>
+     <div class="row"><span>VIIRS raw</span><b>${viirsNote}</b></div>
+     <div class="row"><span>Harmonized</span><b>${fmt(h)}</b></div>
+     ${state.selCells && !state.selCells.has(key) ? '<div class="small">Outside your area</div>' : ""}</div>`).openOn(map);
 }
 
-// Plugin 1: a soft band behind the selected day
-const selectedBand = {
-  id: "selectedBand",
-  beforeDatasetsDraw(c) {
-    if (state.day === null) return;
-    const { ctx, chartArea: a, scales: { x } } = c;
-    const w = (a.right - a.left) / Math.max(1, c.data.labels.length - 1);
-    const cx = x.getPixelForValue(state.day);
-    ctx.save();
-    ctx.fillStyle = chartColors().brand + "22";
-    ctx.fillRect(cx - w / 2, a.top, w, a.bottom - a.top);
-    ctx.restore();
-  },
-};
-// Plugin 2: a thin vertical line where the mouse is (crosshair)
-const crosshair = {
-  id: "crosshair",
-  afterDatasetsDraw(c) {
-    const act = c.tooltip && c.tooltip.getActiveElements();
-    if (!act || !act.length) return;
-    const { ctx, chartArea: a } = c;
-    const xPix = act[0].element.x;
-    ctx.save();
-    ctx.strokeStyle = chartColors().axis;
-    ctx.globalAlpha = 0.5;
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(xPix, a.top); ctx.lineTo(xPix, a.bottom); ctx.stroke();
-    ctx.restore();
-  },
-};
-// Plugin 3: name each line at its right end (direct labels, easier than a legend)
-const endLabels = {
-  id: "endLabels",
-  afterDatasetsDraw(c) {
-    const { ctx } = c;
-    const col = chartColors();
-    const placed = [];
-    c.data.datasets.forEach((ds, di) => {
-      const meta = c.getDatasetMeta(di);
-      if (meta.hidden) return;
-      let k = ds.data.length - 1;
-      while (k >= 0 && ds.data[k] === null) k--;
-      if (k < 0) return;
-      const pt = meta.data[k];
-      let y = pt.y;
-      for (const py of placed) if (Math.abs(py - y) < 14) y = py + (y >= py ? 14 : -14); // avoid overlap
-      placed.push(y);
-      ctx.save();
-      ctx.fillStyle = ds.borderColor;
-      ctx.beginPath(); ctx.arc(pt.x + 10, y, 3.5, 0, Math.PI * 2); ctx.fill();
-      ctx.fillStyle = col.ink2;
-      ctx.font = "500 12px Inter, system-ui, sans-serif";
-      ctx.textBaseline = "middle";
-      ctx.fillText(ds.shortLabel, pt.x + 18, y);
-      ctx.restore();
+function renderAreaStats(a, b) {
+  const keys = state.selCells ? [...state.selCells] : [...squares.keys()];
+  // Same monthly series as the cards and the calendar, so all numbers match.
+  const s = state.series, sum = [0, 0, 0];
+  for (let i = a; i <= b; i++) { sum[0] += s.modis[i]; sum[1] += s.viirs[i] || 0; sum[2] += s.h[i]; }
+  const m = state.c.months;
+  $("areaStats").innerHTML =
+    `<b>${state.area ? state.area.label : "Whole country"}</b> · ${keys.length.toLocaleString("en-US")} squares with fires<br>` +
+    `${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}: ` +
+    `MODIS <b>${fmt(sum[0])}</b> · VIIRS <b>${m[b] < "2012-01" ? "no data" : fmt(sum[1])}</b> · harmonized <b>${fmt(sum[2])}</b>` +
+    (state.area ? `<br><span class="small">A drawn area uses ${state.c.name}'s exchange rates. Squares count if their centre is inside.</span>` : "");
+}
+
+// ---- Area (drawn shape or typed box)
+function useArea(layer, label) {
+  if (state.area && state.area.layer !== layer) drawnGroup.removeLayer(state.area.layer);
+  drawnGroup.addLayer(layer);
+  const update = () => {
+    state.area = { layer, label, feature: layer.toGeoJSON() };
+    const cs = state.c.cell_size, feat = state.area.feature;
+    state.selCells = new Set(Object.keys(state.c.cells).filter((key) => {
+      const [i, j] = key.split("_").map(Number);
+      return turf.booleanPointInPolygon(turf.point([(j + 0.5) * cs, (i + 0.5) * cs]), feat);
+    }));
+    if (!state.selCells.size) toast("No fire squares inside this area. Try a bigger area inside " + state.c.name);
+    render();
+  };
+  layer.on("pm:edit", update);
+  update();
+}
+function clearArea(removeLayer) {
+  if (state.area && removeLayer !== false) drawnGroup.removeLayer(state.area.layer);
+  drawnGroup.clearLayers();
+  state.area = null;
+  state.selCells = null;
+}
+
+// ---- Fire dots (showcase countries)
+function loadPointsYear(slug, year) {
+  const key = `${slug}/${year}`;
+  if (points.has(key)) return Promise.resolve(points.get(key));
+  return new Promise((resolve) => {
+    Papa.parse(`data/points/${slug}/${year}.csv`, {
+      download: true, header: true, skipEmptyLines: true,
+      dynamicTyping: { lat: true, lon: true, frp: true },
+      complete: (res) => { points.set(key, res.data); resolve(res.data); },
+      error: () => { points.set(key, []); resolve([]); },
     });
-  },
-};
-
-function buildChart(d) {
-  const line = (label, shortLabel, dashed) => ({
-    label, shortLabel, data: [],
-    borderWidth: 2,
-    borderDash: dashed ? [6, 4] : [],
-    pointRadius: 0,
-    pointHoverRadius: 5,
-    pointHitRadius: 12,
-    tension: 0.3,
-    spanGaps: false, // no line over no-data days: a gap shows "no data"
   });
-  chart = new Chart($("chart"), {
-    type: "line",
-    data: {
-      labels: d.daily.map((x) => dayNum(x.date)),
-      datasets: [line("MODIS raw", "MODIS raw"), line("VIIRS raw", "VIIRS raw"), line("MODIS harmonized", "Harmonized", true)],
-    },
-    options: {
-      maintainAspectRatio: false,
-      layout: { padding: { right: 92, top: 6 } },
-      animation: { duration: reduceMotion ? 0 : 900, easing: "easeOutQuart" },
-      interaction: { mode: "index", intersect: false }, // hover shows all 3 values of that day
-      onClick: (e) => {
-        const el = chart.getElementsAtEventForMode(e, "index", { intersect: false }, false);
-        if (el.length) { stopPlay(); selectDay(el[0].index === state.day ? null : el[0].index); }
-      },
-      onHover: (e, el) => { e.native.target.style.cursor = el.length ? "pointer" : "default"; },
-      plugins: {
-        legend: { display: false }, // we use direct labels + the legend row under the chart
-        tooltip: {
-          padding: 10, cornerRadius: 10, boxPadding: 4, usePointStyle: true,
-          callbacks: {
-            title: (items) => longDate(d.daily[items[0].dataIndex].date),
-            label: (item) => ` ${item.dataset.label}: ${item.raw === null ? "no data" : item.raw}`,
-          },
-        },
-      },
-      scales: {
-        x: { grid: { display: false }, border: {}, ticks: { maxRotation: 0, autoSkipPadding: 8 }, title: { display: true } },
-        y: { beginAtZero: true, border: { display: false }, title: { display: true, text: "Hot spots per day" } },
-      },
-    },
-    plugins: [selectedBand, crosshair, endLabels],
-  });
-  applyChartColors();
-  const nd = d.no_data_days.viirs;
-  $("chartNote").textContent = nd.length ? `· Gap in the orange line = VIIRS sent no data (${nd.map(shortDate).join(", ")})` : "";
 }
-function applyChartColors() {
-  const c = chartColors();
-  const [m, v, h] = chart.data.datasets;
-  for (const [ds, col] of [[m, c.modis], [v, c.viirs], [h, c.harm]]) {
-    ds.borderColor = col; ds.backgroundColor = col; ds.pointHoverBackgroundColor = col;
-    ds.pointHoverBorderColor = c.surface; ds.pointHoverBorderWidth = 2;
+
+// Dates the dots cover: one day, or the map's months.
+function dotWindow() {
+  const p = state.period, m = state.c.months;
+  if (p.kind === "day") return [p.day, p.day];
+  const [a, b] = mapRange();
+  if (b - a + 1 > MAX_DOT_MONTHS) return null;
+  const end = new Date(Date.UTC(+m[b].slice(0, 4), +m[b].slice(5, 7), 0)).toISOString().slice(0, 10);
+  return [m[a] + "-01", end];
+}
+
+function insideArea(p) {
+  return !state.area || turf.booleanPointInPolygon(turf.point([p.lon, p.lat]), state.area.feature);
+}
+
+let dotsJob = 0;
+async function renderDots() {
+  const c = state.c, showcase = SHOWCASE.has(c.slug);
+  $("dotsField").hidden = !showcase;
+  $("dayDotsBtn").hidden = !showcase;
+  dotLayer.clearLayers();
+  $("mapMsg").textContent = "";
+  if (!showcase || !state.dots) { $("dotsNote").textContent = showcase ? "Every single fire detection, for a short period." : ""; return; }
+  const win = dotWindow();
+  if (!win) {
+    $("dotsNote").textContent = `Dots are shown for up to ${MAX_DOT_MONTHS} months: click a month in the calendar, or pick a day.`;
+    $("mapMsg").textContent = "Click a month in the calendar to see its fire dots";
+    return;
   }
-  const o = chart.options;
-  o.scales.x.ticks.color = c.axis; o.scales.y.ticks.color = c.axis;
-  o.scales.x.title.color = c.axis; o.scales.y.title.color = c.axis;
-  o.scales.x.border.color = c.line;
-  o.scales.y.grid.color = c.grid;
-  o.scales.x.title.text = "Day of " + monthName(state.data);
-  const t = o.plugins.tooltip;
-  t.backgroundColor = c.surface; t.titleColor = c.ink; t.bodyColor = c.ink2;
-  t.borderColor = c.line; t.borderWidth = 1;
-}
-function renderChart(d) {
-  chart.data.datasets[0].data = d.daily.map((x) => x.modis_raw);
-  chart.data.datasets[1].data = d.daily.map((x) => x.viirs_raw);
-  chart.data.datasets[2].data = d.daily.map(harm);
-  chart.data.datasets[2].label = `MODIS harmonized (×${ratio().toFixed(2)})`;
-  $("harmKey").textContent = `MODIS harmonized (×${ratio().toFixed(2)})`;
-  chart.update(); // animates the green line to its new place when the ratio changes
+  const job = ++dotsJob;
+  const years = [...new Set([win[0].slice(0, 4), win[1].slice(0, 4)])];
+  $("mapMsg").textContent = "Loading fire dots…";
+  const rows = (await Promise.all(years.map((y) => loadPointsYear(c.slug, y)))).flat();
+  if (job !== dotsJob) return;          // the user changed something meanwhile
+  let pts = rows.filter((p) => p.date >= win[0] && p.date <= win[1] && insideArea(p));
+  const total = pts.length;
+  if (total > MAX_DOTS) { const step = Math.ceil(total / MAX_DOTS); pts = pts.filter((_, k) => k % step === 0); }
+  const colM = css("--modis"), colV = css("--viirs");
+  for (const p of pts) {
+    const isM = p.sensor === "MODIS";
+    L.circleMarker([p.lat, p.lon], {
+      renderer, radius: isM ? 4 : 2.6, weight: isM ? 1.6 : 0.6,
+      color: isM ? colM : "#ffffff", fillColor: isM ? colM : colV, fillOpacity: isM ? 0.25 : 0.9,
+    }).on("click", (e) => dotPopup(p, e.latlng)).addTo(dotLayer);
+  }
+  $("mapMsg").textContent = "";
+  $("dotsNote").textContent = total
+    ? `${fmt(total)} fire dots${total > MAX_DOTS ? ` (showing a sample of ${fmt(pts.length)})` : ""}. Click a dot for details.`
+    : "No fire dots in this area and period.";
 }
 
-// ------------------------------------------------------------------ CALENDAR
-const CAL_ROWS = [
-  ["MODIS raw", "modis_raw", "--modis"],
-  ["VIIRS raw", "viirs_raw", "--viirs"],
-  ["MODIS harmonized", "harm", "--harm"],
-];
-const calValue = (row, key) => (key === "harm" ? harm(row) : row[key]);
+function dotPopup(p, latlng) {
+  const sat = { N: "Suomi NPP", Terra: "Terra", Aqua: "Aqua", "1": "NOAA-20", N20: "NOAA-20" }[p.satellite] || p.satellite;
+  const conf = p.sensor === "VIIRS" ? ({ n: "nominal", h: "high", l: "low" }[p.confidence] || p.confidence) : p.confidence + "%";
+  const t = String(p.time).padStart(4, "0");
+  L.popup().setLatLng(latlng).setContent(
+    `<div class="pop"><b>${p.sensor} fire dot</b>
+     <div class="row"><span>Lat, lon</span><b>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</b></div>
+     <div class="row"><span>Date</span><b>${p.date}</b></div>
+     <div class="row"><span>Time</span><b>${t.slice(0, 2)}:${t.slice(2)} UTC</b></div>
+     <div class="row"><span>Satellite</span><b>${sat}</b></div>
+     <div class="row"><span>Confidence</span><b>${conf}</b></div>
+     <div class="row"><span>Fire power (FRP)</span><b>${p.frp} MW</b></div></div>`).openOn(map);
+}
 
-function buildCalendar(d) {
-  $("calTitle").textContent = `Burning calendar · ${monthName(d)} (days)`;
+// ------------------------------------------------------------------ BURNING CALENDAR
+function calValue(i) {
+  const s = state.series;
+  if (state.calMode === "harmonized") return s.h[i];
+  if (state.calMode === "modis") return s.modis[i];
+  if (state.calMode === "viirs") return s.viirs[i];
+  return anomaly(i);
+}
+
+function renderCalendar() {
+  const c = state.c, s = state.series, [a, b] = rangeIdx();
+  const mIndex = new Map(c.months.map((m, i) => [m, i]));
+  const y0 = +state.from.slice(0, 4), y1 = +state.to.slice(0, 4);
+  const anomalyMode = state.calMode === "anomaly";
+
+  // One colour scale for the 3 count modes (max of harmonized in the range):
+  // raw MODIS looks pale next to harmonized - that IS the problem we fix.
+  let max = 0;
+  for (let i = a; i <= b; i++) max = Math.max(max, s.h[i] || 0, s.viirs[i] || 0);
+
+  const parts = ['<div></div>', ...MONTHS.map((m) => `<div class="h">${m}</div>`)];
+  for (let y = y0; y <= y1; y++) {
+    parts.push(`<div class="rl">${y}</div>`);
+    for (let k = 1; k <= 12; k++) {
+      const m = `${y}-${String(k).padStart(2, "0")}`, i = mIndex.get(m);
+      const out = m < state.from || m > state.to;
+      const v = i === undefined ? null : calValue(i);
+      let cls = "c", style = "", label;
+      if (i === undefined || (v === null && !anomalyMode)) {
+        cls += " nodata"; label = "";
+      } else if (anomalyMode) {
+        if (v === null) { cls += " nodata"; label = "n/a"; }
+        else { const d = divClass(v); style = `background:${DIV[d]}`; if (d <= 1 || d >= 7) cls += " dark-txt"; label = pct(v); }
+      } else {
+        const k2 = seqClass(v, max, "sqrt");
+        if (k2 >= 0) { style = `background:${SEQ[k2]}`; if (k2 >= 5) cls += " dark-txt"; }
+        else cls += " zero";
+        label = compact(v);
+      }
+      if (out) cls += " out";
+      if (c.partial_months[m]) cls += " partial";
+      else if (c.terra_only_months.includes(m)) cls += " terra";
+      if (state.period.kind === "month" && state.period.mi === i) cls += " sel";
+      parts.push(`<button type="button" class="${cls}" style="${style}" data-i="${i ?? ""}" data-m="${m}" aria-label="${monthLong(m)}: ${label || "no data"}">${label}</button>`);
+    }
+  }
   const cal = $("cal");
-  cal.style.gridTemplateColumns = `140px repeat(${d.daily.length}, minmax(0, 1fr))`;
-  let html = "<div></div>" + d.daily.map((x, i) => {
-    const n = dayNum(x.date);
-    return `<div class="h" data-col="${i}">${n === 1 || n % 5 === 0 ? n : ""}</div>`;
-  }).join("");
-  let k = 0;
-  CAL_ROWS.forEach(([name, key, c], ri) => {
-    html += `<div class="rl"><span class="dot" style="background:var(${c})"></span>${name}</div>`;
-    d.daily.forEach((x, i) => {
-      html += `<button type="button" class="c" data-r="${ri}" data-i="${i}" style="--i:${k++}" aria-label="${shortDate(x.date)} ${name}"></button>`;
-    });
-  });
-  cal.innerHTML = html;
+  cal.innerHTML = parts.join("");
 
-  cal.querySelectorAll(".c").forEach((cell) => {
-    const ri = Number(cell.dataset.r), i = Number(cell.dataset.i);
-    tipFor(cell, () => {
-      const row = state.data.daily[i];
-      const [name, key] = CAL_ROWS[ri];
-      const v = calValue(row, key);
-      return `<div class="tt">${longDate(row.date)}</div>${name}: <b>${v === null ? "no data" : (Number.isInteger(v) ? v : fmt1(v)) + " hot spots"}</b>`;
-    });
-    cell.addEventListener("click", () => { stopPlay(); selectDay(state.day === i ? null : i); });
-  });
+  const modeName = { harmonized: "Harmonized hotspots", modis: "Raw MODIS hotspots", viirs: "Raw VIIRS hotspots", anomaly: "Anomaly vs normal" }[state.calMode];
+  $("calTitle").textContent = `Burning calendar · ${modeName}`;
+  $("calNote").innerHTML = anomalyMode
+    ? `Each month compared with its <b>normal</b> (the median of the same month, ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}). Blue = fewer fires than normal, red = more.`
+    : `The 3 count modes share <b>one colour scale</b>. Raw MODIS looks pale because it misses small fires; harmonized makes old and new years fair to compare. Click a month to show it on the map.`;
+
+  // Legend
+  const marks = `<span><span class="mark"></span>satellite gap (part of the month missing)</span>` +
+    `<span><span class="mark sq"></span>Terra only (before Jul 2002): converted with the Terra-only rate</span>` +
+    `<span><span class="s" style="background:repeating-linear-gradient(45deg,var(--nodata-a) 0 3px,var(--nodata-b) 3px 6px)"></span>no data</span>`;
+  $("scale").innerHTML = anomalyMode
+    ? `<span class="ramp">${DIV.map((c) => `<i style="background:${c}"></i>`).join("")}</span><span>−75% … normal … +100%</span>${marks}`
+    : `<span>Fewer</span><span class="ramp">${SEQ.map((c) => `<i style="background:${c}"></i>`).join("")}</span><span>More (up to ${compact(max)})</span>` +
+      `<span><span class="s" style="background:var(--r0)"></span>0</span>${marks}`;
 }
-function renderCalendar(d) {
-  // ONE colour scale for all rows, so the same colour = the same number
-  const max = Math.max(1, ...d.daily.flatMap((x) => CAL_ROWS.map(([, k]) => calValue(x, k) || 0)));
-  const step = max / 5;
-  const level = (v) => (v === 0 ? 0 : Math.min(5, Math.floor(v / step) + 1)); // 1..5
 
-  $("cal").querySelectorAll(".c").forEach((cell) => {
-    const row = d.daily[Number(cell.dataset.i)];
-    const v = calValue(row, CAL_ROWS[Number(cell.dataset.r)][1]);
-    cell.classList.toggle("nodata", v === null);
-    cell.style.backgroundColor = v === null ? "" : `var(--r${level(v)})`;
-    cell.classList.toggle("sel", state.day === Number(cell.dataset.i));
+// Calendar tooltip + click (one listener for all cells)
+function calTip(el) {
+  const i = el.dataset.i === "" ? undefined : +el.dataset.i, m = el.dataset.m, c = state.c, s = state.series;
+  if (i === undefined) return `<div class="tt">${monthLong(m)}</div>No data`;
+  const nm = s.normal[+m.slice(5, 7) - 1];
+  let html = `<div class="tt">${monthLong(m)}</div>` +
+    `Harmonized: <b>${fmt(s.h[i])}</b><br>MODIS raw: ${fmt(s.modis[i])}<br>VIIRS raw: ${s.viirs[i] === null ? "no data" : fmt(s.viirs[i])}` +
+    `<br>Normal (median): ${nm === null ? "n/a" : fmt(nm)} · ${pct(anomaly(i))}`;
+  if (c.partial_months[m]) html += `<br><i>Partial month: ${c.partial_months[m]}</i>`;
+  if (c.terra_only_months.includes(m)) html += `<br><i>Terra only: converted with the Terra-only rate</i>`;
+  return html;
+}
+(() => {
+  const cal = $("cal");
+  const over = (e) => {
+    const el = e.target.closest(".c");
+    if (!el) return;
+    const b = el.getBoundingClientRect();
+    showTip(calTip(el), e.clientX ?? b.left + b.width / 2, e.clientY ?? b.top);
+  };
+  cal.addEventListener("mouseover", over);
+  cal.addEventListener("mousemove", over);
+  cal.addEventListener("focusin", (e) => { const el = e.target.closest(".c"); if (el) { const b = el.getBoundingClientRect(); showTip(calTip(el), b.left + b.width / 2, b.top); } });
+  cal.addEventListener("mouseleave", hideTip);
+  cal.addEventListener("focusout", hideTip);
+  cal.addEventListener("click", (e) => {
+    const el = e.target.closest(".c");
+    if (!el || el.dataset.i === "") return;
+    state.period = { kind: "month", mi: +el.dataset.i };
+    renderMap();
+    renderCalendar();
+    toast(`The map now shows ${monthLong(el.dataset.m)}`);
   });
-  $("cal").querySelectorAll(".h").forEach((h) => h.classList.toggle("sel", Number(h.dataset.col) === state.day));
+})();
 
-  // Legend: number range of each colour step
-  let s = `<span><span class="s" style="background:var(--r0)"></span>0</span>`;
-  for (let i = 1; i <= 5; i++) {
-    const lo = Math.max(1, Math.ceil((i - 1) * step));
-    const hi = i === 5 ? Math.ceil(max) : Math.ceil(i * step) - 1;
-    s += `<span><span class="s" style="background:var(--r${i})"></span>${lo}–${hi}</span>`;
+// ------------------------------------------------------------------ DAY VIEW
+let dayChart;
+function clampDay(d) {
+  const last = dayAt(state.c.daily.modis.length - 1);
+  return d < state.c.days_start ? state.c.days_start : d > last ? last : d;
+}
+function stepDay(delta) {
+  state.day = clampDay(dateOf(toUTC(state.day) + delta * dayMs));
+  renderDay();
+}
+
+function renderDay() {
+  const c = state.c, d = state.day, i = dayIndex(d), daily = c.daily;
+  $("dayInput").value = d;
+  $("dTitle").textContent = longDate(d);
+  const m = d.slice(0, 7);
+  const notes = ["Whole-country totals"];
+  if (state.area) notes.push("daily numbers are for the whole country, not only your area");
+  if (c.partial_months[m]) notes.push(c.partial_months[m]);
+  if (c.terra_only_months.includes(m)) notes.push("Terra only: harmonized with the Terra-only rate");
+  $("dSub").textContent = notes.join(" · ");
+
+  const rows = [["MODIS raw", daily.modis[i], "var(--modis)"], ["VIIRS raw", daily.viirs[i], "var(--viirs)"], ["Harmonized", daily.harmonized[i], "var(--harm)"]];
+  const top = Math.max(1, ...rows.map((r) => r[1] || 0));
+  $("dStats").innerHTML = rows.map(([name, v, col]) =>
+    `<div class="stat-row"><span>${name}</span><span class="bar"><i style="width:${v === null ? 0 : (v / top) * 100}%;background:${col}"></i></span>` +
+    `<span class="val ${v === null ? "nd" : ""}">${v === null ? "no data" : fmt(v)}</span></div>`).join("");
+
+  // Chart: 15 days before and after
+  const a = Math.max(0, i - 15), b = Math.min(daily.modis.length - 1, i + 15);
+  const labels = [], mo = [], vi = [], h = [];
+  for (let k = a; k <= b; k++) { labels.push(dayAt(k).slice(5)); mo.push(daily.modis[k]); vi.push(daily.viirs[k]); h.push(daily.harmonized[k]); }
+  dayChart.data.labels = labels;
+  dayChart.data.datasets[0].data = mo;
+  dayChart.data.datasets[1].data = vi;
+  dayChart.data.datasets[2].data = h;
+  dayChart.$sel = i - a;
+  // From Feb 2012 harmonized = VIIRS, so the two lines lie on top of each other.
+  $("dayHint").textContent = dayAt(a) >= "2012-02-01" ? "Whole country · after Feb 2012 harmonized = VIIRS (lines overlap)" : "Whole country";
+  dayChart.update(reduceMotion ? "none" : undefined);
+}
+
+function buildDayChart() {
+  dayChart = new Chart($("dayChart"), {
+    type: "line",
+    data: { labels: [], datasets: [
+      { label: "MODIS raw", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25 },
+      { label: "VIIRS raw", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, spanGaps: false },
+      { label: "Harmonized", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, borderDash: [6, 4] },
+    ] },
+    options: {
+      responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
+      interaction: { mode: "index", intersect: false },
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true } },
+      onClick: (e, els) => { if (els.length) { stepDay(els[0].index - dayChart.$sel); } },
+    },
+    // A thin line marks the chosen day.
+    plugins: [{ id: "selLine", afterDatasetsDraw(ch) {
+      if (ch.$sel === undefined) return;
+      const x = ch.scales.x.getPixelForValue(ch.$sel);
+      if (Number.isNaN(x)) return;
+      const g = ch.ctx; g.save(); g.strokeStyle = css("--brand"); g.lineWidth = 1.5;
+      g.beginPath(); g.moveTo(x, ch.chartArea.top); g.lineTo(x, ch.chartArea.bottom); g.stroke(); g.restore();
+    } }],
+  });
+  applyDayChartColors();
+}
+function applyDayChartColors() {
+  const [m, v, h] = [css("--modis"), css("--viirs"), css("--harm")];
+  const ds = dayChart.data.datasets;
+  ds[0].borderColor = m; ds[1].borderColor = v; ds[2].borderColor = h;
+  const sc = dayChart.options.scales;
+  sc.x.ticks.color = sc.y.ticks.color = css("--axis");
+  sc.x.grid = { color: css("--grid") }; sc.y.grid = { color: css("--grid") };
+  dayChart.update("none");
+}
+
+// ------------------------------------------------------------------ TABLE + DOWNLOADS
+function monthlyRows() {
+  const c = state.c, s = state.series, [a, b] = rangeIdx(), rows = [];
+  for (let i = a; i <= b; i++) {
+    const an = anomaly(i);
+    rows.push({ month: c.months[i], modis_raw: s.modis[i], viirs_raw: s.viirs[i], harmonized: s.h[i],
+      normal_median: s.normal[+c.months[i].slice(5, 7) - 1], vs_normal_pct: an === null ? null : Math.round(an) });
   }
-  s += `<span><span class="s" style="background:repeating-linear-gradient(45deg,var(--nodata-a) 0 3px,var(--nodata-b) 3px 6px)"></span>no data</span>`;
-  $("scale").innerHTML = `<span>Few</span>${s}<span>Many</span>`;
+  return rows;
 }
 
-// ------------------------------------------------------------------ CLEANING FUNNEL
-function buildFunnel(d) {
-  const maxRaw = Math.max(d.files.modis_rows, d.files.viirs_rows); // same scale for both sensors
-  let html = "";
-  for (const [sensor, c] of [["MODIS", "--modis"], ["VIIRS", "--viirs"]]) {
-    const rules = d.cleaning.filter((r) => r.sensor === sensor);
-    const raw = rules[0].before, left = rules[rules.length - 1].after;
-    html += `<div class="f-sensor"><div class="f-head"><b style="color:var(${c})">${sensor}</b>` +
-      `<span class="muted">${fmt(left)} of ${fmt(raw)} kept (${Math.round((left / raw) * 100)}%)</span></div>`;
-    const steps = [{ name: "Raw file", after: raw, removed: null, reason: "Every row in the downloaded CSV" },
-      ...rules.map((r) => ({ name: ruleName(r.rule), after: r.after, removed: r.removed, reason: r.reason }))];
-    steps.forEach((st, i) => {
-      const final = i === steps.length - 1;
-      html += `<div class="f-row${final ? " final" : ""}" title="${st.reason}">` +
-        `<span class="name">${final ? "✓ " : ""}${st.name}</span>` +
-        `<span class="bar"><i data-w="${(st.after / maxRaw) * 100}%" style="--i:${i};background:var(${c});opacity:${final ? 1 : 0.35 + 0.65 * (st.after / raw)}"></i></span>` +
-        `<span class="val">${fmt(st.after)}${st.removed ? `<span class="rm">−${fmt(st.removed)}</span>` : ""}</span></div>`;
-    });
-    html += "</div>";
-  }
-  html += `<div class="note-box">Only about <b>1 in 3</b> "hot spots" was a real vegetation fire. ` +
-    `Two factories alone made up hundreds of VIIRS dots. Cleaning changes the exchange rate as much as the maths does.</div>`;
-  $("funnel").innerHTML = html;
+function renderTable() {
+  const showcase = SHOWCASE.has(state.c.slug);
+  $("dlPoints").hidden = !showcase;
+  $("firmsLink").hidden = showcase;
+  $("tbody").innerHTML = monthlyRows().reverse().map((r) =>
+    `<tr><td>${monthShort(r.month)}</td><td class="num">${fmt(r.modis_raw)}</td>` +
+    `<td class="num ${r.viirs_raw === null ? "nd" : ""}">${r.viirs_raw === null ? "no data" : fmt(r.viirs_raw)}</td>` +
+    `<td class="num">${fmt(r.harmonized)}</td>` +
+    `<td class="num ${!r.vs_normal_pct ? "" : r.vs_normal_pct > 0 ? "up" : "down"}">${pct(r.vs_normal_pct)}</td></tr>`).join("");
 }
 
-// ------------------------------------------------------------------ RATIO LIST + DOT STRIP
-function buildRatioList() {
-  const list = $("ratioList");
-  for (const r of RATIOS) {
-    const b = document.createElement("button");
-    b.type = "button";
-    b.className = "ratio-item";
-    b.dataset.key = r.key;
-    b.innerHTML = `<span>${r.name}</span><span class="bar"><i></i></span><span class="val"></span>`;
-    b.addEventListener("click", () => setRatio(r.key));
-    list.appendChild(b);
-  }
-}
-function renderRatioList(d) {
-  const max = Math.max(...RATIOS.map((r) => d.ratio[r.key]));
-  $("ratioList").querySelectorAll(".ratio-item").forEach((b) => {
-    const v = d.ratio[b.dataset.key];
-    b.setAttribute("aria-pressed", b.dataset.key === state.ratioKey);
-    b.querySelector(".val").textContent = v.toFixed(2);
-    // tiny delay so the bars grow from 0 the first time
-    requestAnimationFrame(() => { b.querySelector(".bar i").style.width = (v / max) * 100 + "%"; });
-  });
-  $("ratioWhy").innerHTML = RATIOS.find((r) => r.key === state.ratioKey).why(d);
-}
-
-function drawStrip(d) {
-  const svg = $("strip");
-  const W = Math.max(300, svg.clientWidth || 600), H = 124, P = 14;
-  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
-  const days = d.daily.map((r, i) => ({ r, i, v: dayRatio(r) })).filter((x) => x.v !== null);
-  if (!days.length) { svg.innerHTML = ""; return; }
-  const vals = days.map((x) => x.v).sort((a, b) => a - b);
-  const mid = Math.floor(vals.length / 2);
-  const median = vals.length % 2 ? vals[mid] : (vals[mid - 1] + vals[mid]) / 2;
-  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
-  const maxV = Math.ceil(vals[vals.length - 1] / 5) * 5;
-  const x = (v) => P + (v / maxV) * (W - 2 * P);
-  const c = chartColors();
-  const base = H - 22;
-
-  // simple "beeswarm": if a dot would overlap one before it, stack it higher
-  const placed = [];
-  const dots = days.map((dd) => {
-    const cx = x(dd.v);
-    let level = 0;
-    while (placed.some((p) => p.level === level && Math.abs(p.cx - cx) < 9)) level++;
-    placed.push({ cx, level });
-    return { ...dd, cx, cy: base - 6 - level * 9 };
-  });
-
-  let s = `<line x1="${P}" x2="${W - P}" y1="${base}" y2="${base}" stroke="${c.line}" />`;
-  for (let t = 0; t <= maxV; t += 5) {
-    s += `<text x="${x(t)}" y="${H - 6}" font-size="10.5" fill="${c.axis}" text-anchor="middle">${t}×</text>`;
-  }
-  // The two reference lines. The smaller one gets its label on the LEFT of its
-  // line and the bigger one on the RIGHT, so the labels never overlap.
-  const ref = (v, label, color, side) =>
-    `<line x1="${x(v)}" x2="${x(v)}" y1="6" y2="${base}" stroke="${color}" stroke-width="2" />` +
-    `<text x="${x(v) + (side === "left" ? -6 : 6)}" y="14" font-size="11" font-weight="600" fill="${c.ink2}" ` +
-    `text-anchor="${side === "left" ? "end" : "start"}">${label} ${v.toFixed(1)}</text>`;
-  s += ref(median, "median", c.harm, median <= mean ? "left" : "right");
-  s += ref(mean, "average", c.viirs, median <= mean ? "right" : "left");
-  s += dots.map((p) =>
-    `<circle class="sd" data-i="${p.i}" cx="${p.cx}" cy="${p.cy}" r="${state.day === p.i ? 6 : 4.5}" fill="${c.modis}" ` +
-    `stroke="${state.day === p.i ? c.ink : c.surface}" stroke-width="${state.day === p.i ? 2.5 : 1.5}" style="cursor:pointer"/>`
-  ).join("");
-  svg.innerHTML = s;
-
-  svg.querySelectorAll(".sd").forEach((el) => {
-    const i = Number(el.dataset.i), r = d.daily[i];
-    tipFor(el, () => `<div class="tt">${longDate(r.date)}</div>VIIRS ${r.viirs_raw} ÷ MODIS ${r.modis_raw} = <b>${dayRatio(r).toFixed(1)}×</b>`);
-    el.addEventListener("click", () => { stopPlay(); selectDay(i); });
-  });
-}
-window.addEventListener("resize", () => state.data && drawStrip(state.data));
-
-// ------------------------------------------------------------------ TABLE + CSV
-function buildTable(d) {
-  $("tbody").innerHTML = d.daily.map((r, i) => `<tr data-i="${i}"></tr>`).join("");
-  $("tbody").querySelectorAll("tr").forEach((tr) => {
-    tr.addEventListener("click", () => { stopPlay(); const i = Number(tr.dataset.i); selectDay(state.day === i ? null : i); });
-  });
-}
-function renderTable(d) {
-  const cell = (v, f = fmt) => (v === null ? `<td class="num nd">no data</td>` : `<td class="num">${f(v)}</td>`);
-  $("harmTh").textContent = `MODIS harmonized (×${ratio().toFixed(2)})`;
-  const wrap = document.querySelector(".tablewrap");
-  $("tbody").querySelectorAll("tr").forEach((tr) => {
-    const i = Number(tr.dataset.i), r = d.daily[i];
-    const dr = dayRatio(r);
-    tr.innerHTML = `<td>${r.date}</td>${cell(r.modis_raw)}${cell(r.viirs_raw)}${cell(harm(r), fmt1)}` +
-      `<td class="num ${dr === null ? "nd" : ""}">${dr === null ? "–" : dr.toFixed(1) + "×"}</td>`;
-    const sel = state.day === i;
-    tr.classList.toggle("sel", sel);
-    // scroll only inside the table box (not the whole page)
-    if (sel) {
-      const top = tr.offsetTop - wrap.clientHeight / 2;
-      wrap.scrollTo({ top, behavior: reduceMotion ? "auto" : "smooth" });
-    }
-  });
-}
-
-function downloadCsv() {
-  const d = state.data;
-  const lines = ["date,modis_raw,viirs_raw,modis_harmonized"];
-  for (const r of d.daily) {
-    // empty cell for "no data", same as daily_counts.csv
-    lines.push([r.date, r.modis_raw, r.viirs_raw, harm(r)].map((v) => (v === null ? "" : v)).join(","));
-  }
-  const blob = new Blob([lines.join("\n") + "\n"], { type: "text/csv" });
+function saveCSV(text, name) {
+  const url = URL.createObjectURL(new Blob([text], { type: "text/csv;charset=utf-8" }));
   const a = document.createElement("a");
-  const name = `hotsync_daily_${d.month}_${state.ratioKey}.csv`;
-  a.href = URL.createObjectURL(blob);
-  a.download = name;
-  a.click();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-  toast(`⬇ Saved ${name} (ratio ${ratio().toFixed(2)})`);
+  a.href = url; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+const fileTag = () => `hotsync_${state.c.slug}${state.area ? "_area" : ""}_${state.from}_${state.to}`;
+
+function downloadMonthly() {
+  const rows = monthlyRows().map((r) => ({ country: state.c.name, area: state.area ? state.area.label : "whole country", ...r }));
+  saveCSV(Papa.unparse(rows), fileTag() + "_monthly.csv");
+  toast(`Downloaded ${rows.length} months`);
+}
+
+async function downloadPoints() {
+  const y0 = +state.from.slice(0, 4), y1 = +state.to.slice(0, 4);
+  if (y1 - y0 + 1 > MAX_DOT_YEARS_CSV) { toast(`Choose at most ${MAX_DOT_YEARS_CSV} years for the fire dots CSV`); return; }
+  setLoading("Preparing fire dots…");
+  const years = [];
+  for (let y = y0; y <= y1; y++) years.push(y);
+  const rows = (await Promise.all(years.map((y) => loadPointsYear(state.c.slug, y)))).flat();
+  const end = new Date(Date.UTC(+state.to.slice(0, 4), +state.to.slice(5, 7), 0)).toISOString().slice(0, 10);
+  const pts = rows.filter((p) => p.date >= state.from + "-01" && p.date <= end && insideArea(p));
+  setLoading("");
+  saveCSV(Papa.unparse(pts), fileTag() + "_fire_dots.csv");
+  toast(`Downloaded ${fmt(pts.length)} fire dots`);
 }
 
 // ------------------------------------------------------------------ SCROLL EFFECTS
-// Sections fade up when they come into view. Bars with data-w grow then.
 function setupReveal() {
   const els = document.querySelectorAll(".reveal");
-  const grow = (el) => el.querySelectorAll("[data-w]").forEach((b) => { b.style.width = b.dataset.w; });
-  if (!("IntersectionObserver" in window) || reduceMotion) {
-    els.forEach((el) => { el.classList.add("in"); grow(el); });
-    return;
-  }
-  const io = new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (!e.isIntersecting) continue;
-      e.target.classList.add("in");
-      grow(e.target);
-      if (e.target.contains($("map"))) setTimeout(() => map.invalidateSize(), 300);
-      io.unobserve(e.target);
-    }
-  }, { threshold: 0.01, rootMargin: "0px 0px 120px 0px" }); // start a bit before it is on screen
-  els.forEach((el) => io.observe(el));
+  if (reduceMotion || !("IntersectionObserver" in window)) { els.forEach((e) => e.classList.add("in")); return; }
+  const io = new IntersectionObserver((list) => list.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }), { threshold: 0.08 });
+  els.forEach((e) => io.observe(e));
 }
-
-// Highlight the menu link of the section you are looking at
 function setupScrollSpy() {
   const links = [...document.querySelectorAll("nav.sections a")];
-  const sections = links.map((a) => $(a.getAttribute("href").slice(1))).filter(Boolean);
-  // The active section = the last one whose top is above 40% of the screen.
-  const update = () => {
-    const line = window.innerHeight * 0.4;
-    let current = sections[0];
-    for (const s of sections) if (s.getBoundingClientRect().top <= line) current = s;
-    links.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + current.id));
-  };
-  let ticking = false;
-  window.addEventListener("scroll", () => {
-    if (ticking) return;
-    ticking = true;
-    requestAnimationFrame(() => { update(); ticking = false; });
-  }, { passive: true });
-  update();
+  const io = new IntersectionObserver((list) => list.forEach((en) => {
+    if (en.isIntersecting) links.forEach((a) => a.classList.toggle("active", a.getAttribute("href") === "#" + en.target.id));
+  }), { rootMargin: "-40% 0px -55% 0px" });
+  links.forEach((a) => { const s = document.querySelector(a.getAttribute("href")); if (s) io.observe(s); });
 }
+
+start();

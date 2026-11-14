@@ -1,5 +1,5 @@
 /*
-  HotSync practice: style.css
+  HotSync: style.css
   All the looks of the page. Colours are "tokens" (named variables) on :root,
   so light and dark mode only swap the token values, not the rules.
   Chart colours were checked with a colour-blind safety validator.
@@ -25,8 +25,9 @@
   --shadow-lift: 0 2px 4px rgba(15, 17, 21, .05), 0 16px 40px rgba(15, 17, 21, .10);
 
   /* series colours (identity) */
-  --modis: #2f5bea;
-  --viirs: #e8613a;
+  /* Colour-blind-safe sensor colours (plan): MODIS orange, VIIRS purple */
+  --modis: #e66100;
+  --viirs: #5d3a9b;
   --harm: #1a9e75;
   --brand: #2f5bea;
 
@@ -73,8 +74,8 @@
     --chip: rgba(255, 255, 255, .06);
     --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
     --shadow-lift: 0 2px 6px rgba(0, 0, 0, .4), 0 20px 50px rgba(0, 0, 0, .5);
-    --modis: #5c7cf2;
-    --viirs: #e8603a;
+    --modis: #ff8a3d;
+    --viirs: #a58be0;
     --harm: #22ad80;
     --brand: #6f8cff;
     --r0: #1f2538;
@@ -109,8 +110,8 @@
   --chip: rgba(255, 255, 255, .06);
   --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 30px rgba(0, 0, 0, .35);
   --shadow-lift: 0 2px 6px rgba(0, 0, 0, .4), 0 20px 50px rgba(0, 0, 0, .5);
-  --modis: #5c7cf2;
-  --viirs: #e8603a;
+  --modis: #ff8a3d;
+  --viirs: #a58be0;
   --harm: #22ad80;
   --brand: #6f8cff;
   --r0: #1f2538;
@@ -378,23 +379,36 @@ h2 .num { font-size: 11px; font-weight: 700; color: #fff; background: var(--bran
 .chartbox { position: relative; height: 340px; }
 
 /* ============================================================ CALENDAR */
+/* Rows = years, columns = Jan..Dec. Every cell shows its number. */
 .cal-scroll { overflow-x: auto; padding-bottom: 4px; }
-.cal { display: grid; gap: 4px; font-size: 11px; align-items: center; min-width: 640px; }
-.cal .h { color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
-.cal .h.sel { color: var(--brand); font-weight: 700; }
-.cal .rl { color: var(--ink2); font-size: 12.5px; display: flex; align-items: center; gap: 7px; white-space: nowrap; }
+.cal { display: grid; grid-template-columns: 46px repeat(12, minmax(42px, 1fr)); gap: 3px; font-size: 11px; align-items: center; min-width: 600px; }
+.cal .h { color: var(--muted); text-align: center; font-weight: 600; }
+.cal .rl { color: var(--ink2); font-size: 12px; font-variant-numeric: tabular-nums; font-weight: 600; }
 .cal .c {
-  aspect-ratio: 1; border-radius: 5px; border: 0; padding: 0;
-  background: var(--r0);
-  transition: background-color .5s var(--ease), transform .2s var(--ease), box-shadow .2s;
-  animation: pop .45s var(--ease) both;
-  animation-delay: calc(var(--i) * 12ms);
+  position: relative; height: 26px; border-radius: 5px; border: 0; padding: 0;
+  background: var(--r0); color: #1b1b1b;
+  font-size: 10.5px; font-weight: 600; font-variant-numeric: tabular-nums;
+  transition: background-color .4s var(--ease), transform .15s var(--ease), box-shadow .15s;
 }
-.cal .c:hover, .cal .c:focus-visible { transform: scale(1.25); z-index: 2; box-shadow: 0 4px 12px rgba(0, 0, 0, .25); }
-.cal .c.nodata { background: repeating-linear-gradient(45deg, var(--nodata-a) 0 3px, var(--nodata-b) 3px 6px); }
-.cal .c.sel { box-shadow: 0 0 0 2px var(--card-solid), 0 0 0 4px var(--brand); }
+.cal .c.dark-txt { color: #fff; }
+.cal .c.zero { color: var(--muted); font-weight: 400; }
+.cal .c:hover, .cal .c:focus-visible { transform: scale(1.12); z-index: 2; box-shadow: 0 4px 12px rgba(0, 0, 0, .25); }
+.cal .c.nodata { background: repeating-linear-gradient(45deg, var(--nodata-a) 0 3px, var(--nodata-b) 3px 6px); color: var(--muted); font-weight: 400; }
+.cal .c.out { opacity: .28; }
+.cal .c.sel { box-shadow: 0 0 0 2px var(--card-solid), 0 0 0 4px var(--brand); z-index: 1; }
+/* Partial month (satellite gap) or Terra-only month: a small corner mark */
+.cal .c.partial::after, .cal .c.terra::after {
+  /* black + white so the mark shows on light AND dark cells */
+  content: ""; position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%;
+  background: #111; border: 1.5px solid #fff;
+}
+.cal .c.terra::after { border-radius: 1px; background: #fff; border: 1.5px solid #111; }
 .scale { display: flex; align-items: center; gap: 6px 12px; font-size: 12px; color: var(--muted); margin-top: 14px; flex-wrap: wrap; }
 .scale .s { width: 22px; height: 12px; border-radius: 3px; display: inline-block; vertical-align: -2px; margin-right: 4px; }
+.scale .ramp { display: inline-flex; border-radius: 3px; overflow: hidden; vertical-align: -2px; }
+.scale .ramp i { width: 18px; height: 12px; display: block; }
+.scale .mark { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: #111; border: 1.5px solid #fff; margin-right: 4px; vertical-align: -1px; }
+.scale .mark.sq { border-radius: 1px; background: #fff; border-color: #111; }
 
 /* Floating tooltip (used by the calendar and the ratio dots) */
 .tip {
@@ -483,6 +497,41 @@ footer a { color: var(--brand); }
 #error { display: none; padding: 14px 18px; border-radius: var(--radius); background: #fde8e4; color: #8a1d10; }
 #error code { background: rgba(0, 0, 0, .06); padding: 1px 5px; border-radius: 4px; }
 
+/* ============================================================ STAGE 4: CONTROLS, MAP PANEL, DAY */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.controls input[type=month], #countryInput, #dayInput, .box-grid input {
+  padding: 7px 10px; border-radius: 10px; border: 1px solid var(--line-strong);
+  background: var(--card-solid); min-width: 0;
+}
+#countryInput { width: 210px; font-weight: 600; }
+.loading { font-size: 12.5px; color: var(--brand); font-weight: 600; min-height: 1em; }
+.loading:empty { display: none; }
+.loading::before { content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; border: 2px solid var(--brand); border-right-color: transparent; animation: turn .8s linear infinite; vertical-align: -1px; }
+@keyframes turn { to { transform: rotate(360deg); } }
+
+.map-wrap { position: relative; }
+.map-msg { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 500; pointer-events: none;
+  background: var(--card-solid); color: var(--ink); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 12.5px; box-shadow: var(--shadow); max-width: 90%; text-align: center; }
+.map-msg:empty { display: none; }
+.side-card { display: flex; flex-direction: column; gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 7px; align-items: flex-start; }
+.field .lbl { font-size: 12px; color: var(--muted); }
+.period { font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+.box-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; width: 100%; }
+.box-grid label { display: flex; flex-direction: column; gap: 3px; font-size: 11.5px; color: var(--ink2); }
+.box-grid input { width: 100%; padding: 6px 7px; }
+.kpi .n.small-n { font-size: 20px; line-height: 1.3; }
+.small-chart { height: 260px; }
+.legend .sw { width: 34px; height: 10px; border-radius: 2px; display: inline-block; }
+td.up { color: #b2182b; } td.down { color: #2166ac; }
+:root[data-theme="dark"] td.up { color: #f4a582; } :root[data-theme="dark"] td.down { color: #92c5de; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) td.up { color: #f4a582; }
+  :root:not([data-theme="light"]) td.down { color: #92c5de; }
+}
+.leaflet-pm-toolbar a { background-color: var(--card-solid); }
+a.ghost-btn { color: var(--ink); text-decoration: none; }
+
 /* Sections slide up softly when they scroll into view */
 .reveal { opacity: 0; transform: translateY(18px); transition: opacity .7s var(--ease), transform .7s var(--ease); }
 .reveal.in { opacity: 1; transform: none; }
@@ -509,6 +558,11 @@ footer a { color: var(--brand); }
   .stat-row { grid-template-columns: 110px minmax(0, 1fr) 48px; }
   #map { height: 340px; }
   .seg button { padding: 5px 9px; }
+  #countryInput { width: 100%; }
+  .controls .ctrl { flex-wrap: wrap; width: 100%; }
+  .controls input[type=month] { flex: 1 1 120px; }
+  .box-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #calSeg { flex-wrap: wrap; }
   footer { padding: 0 16px 28px; }
 }
 

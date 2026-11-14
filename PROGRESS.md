@@ -39,3 +39,11 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - `web/data` = 488 MB (plan said 300 MB; **team decided to keep it**: GitHub Pages limit is 1 GB, biggest file 26 MB).
 - Fixed: every country timeline now runs to 2025-12 (65 small countries used to stop at their last fire).
 - **Stage 6 warning:** don't rewrite the big country files every 6 h (git history would grow ~1 GB/day); keep 2026 in small separate files.
+
+## 2026-11-14 ~19:30 · Stage 4: website core
+- New `web/index.html` + `web/app.js` (rewritten) + `web/style.css` (prototype look kept). CDN: Leaflet 1.9.4, Leaflet-Geoman 2.17.0, Turf 7.1.0, Chart.js 4.4.1, PapaParse 5.4.1.
+- Searchable country picker (234 countries, loads `country/<slug>.json` only when chosen, cached), month-to-month date range.
+- Map: squares (log colour scale), draw box/shape (Geoman) or type a lat/lon box → selection = squares whose centre is inside; click square → numbers; fire dots for Uzbekistan/Argentina (orange MODIS #E66100, purple VIIRS #5D3A9B) for ≤3 months, clickable.
+- Burning calendar years × months: Harmonized | Raw MODIS | Raw VIIRS | Anomaly (vs 2001–2025 median), number in each cell, gap/Terra-only marks; click → map month.
+- Cards (total, busiest month, top 3 years, latest month vs normal + rank), auto summary sentence, day view + 30-day chart, monthly CSV, dots CSV (showcase) / FIRMS link.
+- Tested in Chrome: Uzbekistan, Brazil, UK, Argentina; box + drawn rectangle; dots; phone width (390 px, no sideways scroll); light/dark; no console errors.
