@@ -127,6 +127,31 @@
     </div>
   </section>
 
+  <!-- ============ REAL FIRE NUMBERS (like the first prototype) ============ -->
+  <div class="row-label">Real fire numbers: what the satellites counted (after cleaning, no conversion)</div>
+  <section class="kpis" aria-label="Real fire numbers">
+    <div class="card lift prism-hover kpi reveal" style="--c:var(--modis)">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></div>
+      <div><div class="t">MODIS real fires <button class="q" type="button" data-tip="MODIS: the older camera, on the Terra (from 2000) and Aqua (from 2002) satellites. Big pixels, about 1 km, so it misses small fires.">?</button></div>
+      <div class="n" id="kModis">…</div><div class="s" id="kModisS"></div></div>
+    </div>
+    <div class="card lift prism-hover kpi reveal" style="--c:var(--viirs)">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 2 1.3 3 2.3 3C11 9 11 6 12 3z"/></svg></div>
+      <div><div class="t">VIIRS real fires <button class="q" type="button" data-tip="VIIRS: the newer camera (Suomi NPP from 2012, NOAA-20 after Nov 2026). Small pixels, about 375 m, so it sees many small fires MODIS misses.">?</button></div>
+      <div class="n" id="kViirs">…</div><div class="s" id="kViirsS"></div></div>
+    </div>
+    <div class="card lift prism-hover kpi clickable reveal" id="kBusyDayCard" role="button" tabindex="0" style="--c:var(--r4)" title="Click to open this day">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
+      <div><div class="t">Busiest day <button class="q" type="button" data-tip="The single day with the most harmonized hotspots in your dates. Click the card to open it in the day view.">?</button></div>
+      <div class="n small-n" id="kBusyDay">…</div><div class="s" id="kBusyDayS"></div></div>
+    </div>
+    <div class="card lift prism-hover kpi reveal" style="--c:var(--harm)">
+      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
+      <div><div class="t">Fire strength <button class="q" type="button" data-tip="Fire radiative power (FRP): how much heat a fire gives off, in megawatts, per detection. Higher = bigger or hotter fires on average.">?</button></div>
+      <div class="n" id="kFrp">…</div><div class="s" id="kFrpS"></div></div>
+    </div>
+  </section>
+
   <!-- ============ MAP ============ -->
   <section id="where" class="grid-2">
     <div class="card reveal">

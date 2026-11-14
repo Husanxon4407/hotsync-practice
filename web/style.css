@@ -536,6 +536,7 @@ td.up { color: #b2182b; } td.down { color: #2166ac; }
 a.ghost-btn { color: var(--ink); text-decoration: none; }
 
 /* ============================================================ STAGE 5: PROOF, HOW, LIMITS, SOURCES */
+.row-label { font-size: 12.5px; font-weight: 600; color: var(--ink2); margin: 2px 2px -12px; }
 /* Fire dots: NASA draws all dots orange; the VIIRS layer is turned purple */
 .viirs-dots { filter: hue-rotate(285deg) saturate(1.2); }
 .fire-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }

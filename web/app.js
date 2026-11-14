@@ -351,6 +351,17 @@ function buildControls() {
   // Downloads
   $("dlMonthly").addEventListener("click", downloadMonthly);
 
+  // Busiest-day card: click (or Enter) opens that day in the day view
+  const openBusy = () => {
+    const d = $("kBusyDayCard").dataset.day;
+    if (!d) return;
+    state.day = d;
+    renderDay();
+    $("day").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  };
+  $("kBusyDayCard").addEventListener("click", openBusy);
+  $("kBusyDayCard").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openBusy(); } });
+
   // This month vs normal: month picker
   $("normalMonth").innerHTML = MONTHS_LONG.map((m, k) => `<option value="${k + 1}">${m}</option>`).join("");
   $("normalMonth").addEventListener("change", (e) => { state.normalMonth = +e.target.value; renderNormal(); renderHow(); });
@@ -386,15 +397,20 @@ function rangeIdx() {
 // plus the "normal" (median) for each calendar month over 2001-2025.
 function computeSeries() {
   const c = state.c, n = c.months.length;
-  let modis, viirs, h;
+  let modis, viirs, h, frpM, frpV;          // frp = fire power (MW), summed
   if (!state.selCells) {
     modis = c.totals.modis.slice();
     viirs = c.totals.viirs.slice();
     h = c.totals.harmonized.slice();
+    frpM = c.totals.frp_modis.map((x) => x || 0);
+    frpV = c.totals.frp_viirs.map((x) => x || 0);
   } else {
     modis = new Array(n).fill(0); viirs = new Array(n).fill(0); h = new Array(n).fill(0);
+    frpM = new Array(n).fill(0); frpV = new Array(n).fill(0);
     for (const key of state.selCells) {
-      for (const r of c.cells[key]) { modis[r[0]] += r[1]; viirs[r[0]] += r[2]; h[r[0]] += r[3]; }
+      for (const r of c.cells[key]) {
+        modis[r[0]] += r[1]; viirs[r[0]] += r[2]; h[r[0]] += r[3]; frpM[r[0]] += r[4]; frpV[r[0]] += r[5];
+      }
     }
     // VIIRS has no data before 2012: keep it "no data", not 0.
     c.totals.viirs.forEach((v, i) => { if (v === null) viirs[i] = null; });
@@ -404,7 +420,7 @@ function computeSeries() {
     .map((m, i) => [m, i])
     .filter(([m]) => +m.slice(5, 7) === k + 1 && +m.slice(0, 4) >= NORMAL_YEARS[0] && +m.slice(0, 4) <= NORMAL_YEARS[1])
     .map(([, i]) => h[i])));
-  state.series = { modis, viirs, h, normal };
+  state.series = { modis, viirs, h, normal, frpM, frpV };
 }
 const anomaly = (i) => {
   const s = state.series, nm = s.normal[+state.c.months[i].slice(5, 7) - 1];
@@ -416,6 +432,7 @@ function render() {
   computeSeries();
   renderHeader();
   renderCards();
+  renderRealStats();
   renderMap();
   renderCalendar();
   renderDay();
@@ -461,6 +478,40 @@ function renderHeader() {
 }
 
 // ------------------------------------------------------------------ SUMMARY CARDS + SENTENCE
+// "Real fire numbers": what the satellites actually counted (after cleaning,
+// no exchange rate), like the cards of the first prototype.
+function renderRealStats() {
+  const c = state.c, s = state.series, [a, b] = rangeIdx();
+  let mo = 0, vi = 0, fm = 0, fv = 0, viMonths = 0;
+  for (let i = a; i <= b; i++) {
+    mo += s.modis[i]; fm += s.frpM[i];
+    if (s.viirs[i] !== null) { vi += s.viirs[i]; fv += s.frpV[i]; viMonths++; }
+  }
+  const years = (b - a + 1) / 12;
+  $("kModis").textContent = compact(mo);
+  $("kModisS").textContent = `${fmt(mo)} detections · ${compact(mo / years)} per year`;
+  $("kViirs").textContent = viMonths ? compact(vi) : "no data";
+  $("kViirsS").textContent = viMonths
+    ? `${fmt(vi)} detections · ${compact(vi / (viMonths / 12))} per year (from Jan 2012)` : "VIIRS starts in January 2012";
+
+  // Busiest day in the range (daily numbers are for the whole country/world)
+  const d = c.daily, i0 = Math.max(0, dayIndex(state.from + "-01"));
+  const endDay = dateOf(Date.UTC(+state.to.slice(0, 4), +state.to.slice(5, 7), 0));
+  const i1 = Math.min(d.harmonized.length - 1, dayIndex(endDay));
+  let best = i0;
+  for (let i = i0; i <= i1; i++) if ((d.harmonized[i] || 0) > (d.harmonized[best] || 0)) best = i;
+  const day = dayAt(best);
+  $("kBusyDay").textContent = new Date(toUTC(day)).toLocaleDateString("en-US", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
+  $("kBusyDayS").textContent = `${fmt(d.harmonized[best])} harmonized hotspots` + (state.area ? " (whole country)" : "");
+  $("kBusyDayCard").dataset.day = day;
+
+  // Fire strength: average fire radiative power (FRP) per detection
+  const useV = vi > 0, frp = useV ? fv / vi : mo ? fm / mo : 0;
+  $("kFrp").textContent = frp ? frp.toFixed(1) + " MW" : "–";
+  $("kFrpS").textContent = `average per ${useV ? "VIIRS" : "MODIS"} detection` +
+    (useV && mo ? ` · MODIS: ${(fm / mo).toFixed(1)} MW (bigger pixels)` : "");
+}
+
 function renderCards() {
   const c = state.c, s = state.series, [a, b] = rangeIdx();
   const idx = [];
