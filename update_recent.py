@@ -279,8 +279,18 @@ def write_day(day, rows):
     """Replace this day's file (so a day fetched twice is never counted twice)."""
     DAYS_DIR.mkdir(parents=True, exist_ok=True)
     path = DAYS_DIR / f"{day}.csv.gz"
-    buf = rows.to_csv(index=False).encode("utf-8")
-    with gzip.GzipFile(path, "wb", mtime=0) as f:   # mtime=0: same data = same bytes
+    # "\n" line ends on every computer (Windows writes "\r\n"): the same data
+    # then gives the same bytes on the laptop and on GitHub -> no empty commits.
+    buf = rows.to_csv(index=False, lineterminator="\n").encode("utf-8")
+    # Same data already saved? Then don't touch the file. (We compare the
+    # unzipped text: Windows and Linux zip the same text into different bytes.)
+    if path.exists():
+        try:
+            if gzip.decompress(path.read_bytes()) == buf:
+                return
+        except OSError:
+            pass                                    # broken file: rewrite it
+    with gzip.GzipFile(path, "wb", mtime=0) as f:
         f.write(buf)
 
 
