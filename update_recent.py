@@ -318,6 +318,19 @@ def update_days(firms, days):
                 continue
             mo, vi = clean(m_rows.get(d), "MODIS"), clean(v_rows.get(d), "VIIRS")
             rows = count_day(mo, vi, sizes)
+            # S-NPP sometimes sends only PART of a day (e.g. 3 Aug 2026: 1,763
+            # fires instead of ~60,000). VIIRS normally sees ~4-5x more than
+            # MODIS; below 2x the day is broken: try NOAA-20, keep the better one.
+            m_n, v_n = int(rows["m"].sum()), int(rows["v"].sum())
+            if (d <= SNPP_LAST and str(v_src.get(d, "")).startswith("VIIRS_SNPP")
+                    and m_n > 0 and v_n < 2 * m_n):
+                alt, alt_src, _ = fetch(firms, [d], lambda x: noaa20_source(avail, x))
+                if d in alt:
+                    alt_rows = count_day(mo, clean(alt[d], "VIIRS"), sizes)
+                    if alt_rows["v"].sum() > 1.3 * v_n:
+                        say(f"    {d}: S-NPP sent part of the day ({v_n:,} fires); "
+                            f"NOAA-20 has {int(alt_rows['v'].sum()):,}: using NOAA-20")
+                        rows, v_src[d] = alt_rows, alt_src[d]
             write_day(d, rows)
             sources[d] = {"modis": m_src.get(d), "viirs": v_src.get(d)}
             for s, n in (("MODIS", int(rows["m"].sum())), ("VIIRS", int(rows["v"].sum()))):

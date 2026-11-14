@@ -1,0 +1,954 @@
+{
+"2026-03-02": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-03": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-04": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-05": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-06": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-27": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-28": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-29": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-30": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-03-31": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-01": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-02": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-03": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-04": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-05": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-06": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-07": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-08": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-09": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-10": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-11": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-12": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-13": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-14": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-15": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-16": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-17": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-18": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-19": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-20": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-21": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-22": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-23": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-24": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-25": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-26": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-27": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-04-28": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-04-29": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-04-30": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-05-01": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-02": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-03": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-04": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-05": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-06": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-07": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-08": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-09": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-10": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-11": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-12": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-13": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-14": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-15": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-16": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-17": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-18": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-19": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-20": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-21": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-22": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-23": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-24": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-25": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-26": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-27": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-28": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-29": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-30": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-05-31": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-01": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-06-02": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-06-03": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-04": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-05": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-06": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-07": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-08": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-09": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-10": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-11": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-12": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-13": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-14": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-15": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-16": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-17": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-18": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-19": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-20": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-21": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-22": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-23": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-24": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-25": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-26": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-27": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-28": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-29": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-06-30": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-01": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-02": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-03": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-04": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-05": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-06": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-07": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-08": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-09": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-10": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-11": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-12": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-13": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-14": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-15": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-16": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_SP"
+},
+"2026-07-17": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-18": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-19": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-20": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-21": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-22": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-23": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-24": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-25": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-26": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-27": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-28": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-29": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-30": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-07-31": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_SP"
+},
+"2026-08-01": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-02": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-03": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-08-04": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-08-05": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-06": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-07": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-08": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-09": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-10": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-11": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-12": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-13": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-14": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-15": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-16": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-17": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-18": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-19": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-20": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-21": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-22": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-23": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-24": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-25": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-26": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-27": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-28": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-29": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-30": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-08-31": {
+"modis": "MODIS_SP",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-01": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-02": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-03": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-04": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-05": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-06": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-07": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-08": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-09": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-10": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-11": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-12": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-13": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-14": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-15": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-16": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-17": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-18": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-19": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-20": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-21": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-22": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-23": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-24": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-25": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-26": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-27": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-28": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-29": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-09-30": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-01": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-02": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-03": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-04": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-05": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-06": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-07": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-08": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-09": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-10": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-11": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-12": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-10-13": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-10-14": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-15": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-16": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-17": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-18": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-19": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-20": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-21": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-22": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-23": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-24": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-25": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-26": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-27": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-28": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-29": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-30": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-10-31": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-11-01": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-11-02": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_SNPP_NRT"
+},
+"2026-11-03": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-04": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-05": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-06": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-07": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-08": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-09": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-10": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-11": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-12": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-13": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+},
+"2026-11-14": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT"
+}
+}
