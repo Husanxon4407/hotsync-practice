@@ -57,15 +57,25 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - How HotSync works (country cleaning funnel, 12-month rate table with Terra-only, validation), Limits, Data & Sources with the exact FIRMS acknowledgement.
 - Accessibility: muted text 5.2:1, dark-mode button colour 5.3:1, anomaly text colours fixed, line patterns (dotted/solid/dashed), aria-labels on charts and Geoman buttons.
 
+
+## 2026-11-14 ~23:30 · Stage 5 update: every place treated the same (team decision)
+- **Removed** the Chilecito/Argentina case study (it came from a learning video, not from the official challenge) and the CONAE caption/link.
+- **Removed** the Uzbekistan/Argentina-only fire-dot files (`web/data/points/`, −221 MB). `web/data` is now **271 MB** (under the plan's 300 MB).
+- **New first view: World** (`web/data/country/world.json`, 2° squares, 16.7 MB): all 234 countries added together, each with its own exchange rates.
+  World hidden-years test: 2.2% error, r = 0.986. Rebuild only the world: `python process_all.py --world`.
+- **New: fire dots for the whole planet, any day since Nov 2000** (MODIS) / Jan 2012 (VIIRS), from NASA GIBS WMS (nothing stored by us).
+  Buttons: 1 day / 3 days / 7 days / 1 month, ◀ ▶ to move, MODIS (orange) and VIIRS (purple) on/off; calendar click shows that month.
+  These dots are NASA pictures (raw, not cleaned) and can't be clicked; clickable live dots come in Stage 6.
+
 ---
-## WHERE WE STOPPED (2026-11-14 ~21:00) — read this first after a restart
-**Done:** Stages 0–5 (all committed on branch `full-history`). **Next:** Stage 6 (2026 data + GitHub robot every 6 h + live fires) — waiting for the team to type `go`.
+## WHERE WE STOPPED (2026-11-14 ~23:30) — read this first after a restart
+**Done:** Stages 0–5 (+ the "every place the same" update), all committed on branch `full-history`. **Next:** Stage 6 (2026 data + GitHub robot every 6 h + live fires) — waiting for the team to type `go`.
 
 **Remember for Stage 6:**
-- Do NOT rewrite the big country JSON files every 6 h (git history would grow ~1 GB/day). Proposal: keep 2026 in small separate files (e.g. `web/data/recent/`) and merge them in the browser; the robot only commits those small files.
+- Do NOT rewrite the big country JSON files every 6 h (git history would grow ~1 GB/day). Proposal: keep 2026 in small separate files (e.g. `web/data/recent/`) and merge them in the browser; the robot only commits those small files. The World file must get 2026 too (sum of countries).
+- Live layer (last 48 h, clickable dots) for the WHOLE world, the same for every place.
 - `.env` has FIRMS_MAP_KEY (never print or commit it). The team must add the same key as a GitHub secret `FIRMS_MAP_KEY`.
 - S-NPP VIIRS stopped 2026-11-02 → NOAA-20 after that. Static cells list for the robot: `data/static_cells.csv`. Country polygons: `data/countries.geojson` (`countries.assign_country`).
-- The case study shows "July 2026 counts arrive with the 2026 update": after Stage 6 it should select July 2026.
-- `web/data` is 488 MB (team kept it; GitHub Pages limit 1 GB).
+- Every place is treated the same: no "showcase" countries anywhere.
 
 **How to look at the site:** `cd web` → `..\.venv\Scripts\python -m http.server 8000` → http://localhost:8000

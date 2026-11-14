@@ -536,8 +536,10 @@ td.up { color: #b2182b; } td.down { color: #2166ac; }
 a.ghost-btn { color: var(--ink); text-decoration: none; }
 
 /* ============================================================ STAGE 5: PROOF, HOW, LIMITS, SOURCES */
-.case-btn { font-weight: 600; border-color: color-mix(in srgb, var(--viirs) 50%, var(--line)); }
-.case-cap { margin-top: 8px; font-size: 12.5px; font-style: italic; color: var(--ink2); }
+/* Fire dots: NASA draws all dots orange; the VIIRS layer is turned purple */
+.viirs-dots { filter: hue-rotate(285deg) saturate(1.2); }
+.fire-row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+#fireDate { padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--card-solid); }
 .gibs-row { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
 .gibs-row select, .gibs-row input, #normalMonth {
   padding: 6px 8px; border-radius: 10px; border: 1px solid var(--line-strong); background: var(--card-solid); min-width: 0;

@@ -95,7 +95,10 @@ PARTIAL_MONTHS = {
     "2002-03": "Terra MODIS off ~19-28 Mar 2002",
 }
 
-SHOWCASE = {"Uzbekistan", "Argentina"}   # these keep every fire dot
+# Team decision (Stage 5): every place is treated the same, so no country
+# gets its own dot files. Fire dots for the whole planet come straight from
+# NASA GIBS on the website. (Set names here to write dot CSVs again.)
+SHOWCASE = set()
 CHECK_IMAGES = {"Uzbekistan", "Argentina", "United_Kingdom", "Brazil",
                 "Kazakhstan"}
 COLUMNS = ["latitude", "longitude", "acq_date", "acq_time", "satellite",
@@ -904,6 +907,8 @@ def run_all(fresh):
             report(name, agg, res) if name == "Uzbekistan" else None
 
     listing.sort(key=lambda x: x["name"])
+    # The World overview goes first in the list (it is the page's first view).
+    listing.insert(0, build_world(aggs, global_rate, global_terra))
     (config.WEB_DATA_DIR / "countries.json").write_text(
         json.dumps(listing, separators=(",", ":")), encoding="utf-8")
     pd.DataFrame(rows).sort_values("country").to_csv(
@@ -936,6 +941,132 @@ def run_all(fresh):
     print(f"  check images: {config.CHECKS_DIR}")
 
 
+# ---------------------------------------------------------------------------
+# WORLD OVERVIEW: all countries added together (the page's first view)
+# ---------------------------------------------------------------------------
+WORLD_CELLS = (1.0, 2.0)          # world squares: 1 degree, or 2 if too big
+
+
+def build_world(aggs, global_rate, global_terra):
+    """Add up every country into one 'World' file with the same fields.
+
+    Each country keeps ITS OWN exchange rates: world harmonized = the sum
+    of every country's harmonized numbers (not one world rate x MODIS).
+    """
+    t0 = time.time()
+    monthly_parts, grids, dailies, statics = [], [], [], []
+    steps = new_steps()
+    for name, agg in aggs.items():
+        monthly = monthly_table(agg)
+        rates, _, _, terra_rates, _ = country_rates(monthly, global_rate,
+                                                    global_terra)
+        monthly["h"] = [harmonize(m, a, b, rates, terra_rates) for m, a, b
+                        in zip(monthly["month"], monthly["modis"],
+                               monthly["viirs"])]
+        monthly_parts.append(monthly)
+        g = agg["grid"].copy()
+        g["month"] = [ym_str(y) for y in g["ym"]]
+        g["h"] = [harmonize(m, a, b, rates, terra_rates) for m, a, b
+                  in zip(g["month"], g["n_modis"], g["n_viirs"])]
+        g["cs"] = agg["meta"]["cell"]
+        grids.append(g)
+        dailies.append(daily_arrays(agg, rates, terra_rates))
+        for k, s in enumerate(agg["meta"]["steps"]):
+            for sensor in ("MODIS", "VIIRS"):
+                for f in ("before", "removed"):
+                    steps[k][sensor][f] += s[sensor][f]
+        if len(agg["static"]):
+            statics.append(agg["static"])
+
+    # Monthly totals: sum of all countries (same month list everywhere)
+    total = pd.concat(monthly_parts).groupby(["ym", "month"], as_index=False)[
+        ["modis", "viirs", "frp_modis", "frp_viirs", "terra", "h"]].sum()
+    months = total["month"].tolist()
+    before_viirs = total["month"] < VIIRS_START_DAY[:7]
+
+    # World "exchange rates" (all countries together): shown in the table
+    # and used by the proof chart; the hidden-years test on world totals.
+    rates, _, n_ratios = learn_rates(total, global_rate=global_rate)
+    terra_rates, _, _ = learn_rates(
+        total[["month", "viirs"]].assign(modis=total["terra"]),
+        global_rate=global_terra)
+    validation, _ = validate(total, global_rate)
+
+    # Squares: 0.1/0.25 country squares nest exactly into 1 or 2 degree squares
+    g = pd.concat(grids, ignore_index=True)
+    first = ym_of(HISTORY_START)
+    for size in WORLD_CELLS:
+        f = (size / g["cs"]).round().astype(int)       # 10, 4, 20 or 8
+        w = g.assign(I=np.floor_divide(g["i"], f), J=np.floor_divide(g["j"], f))
+        w = w.groupby(["ym", "I", "J"], as_index=False)[
+            ["n_modis", "n_viirs", "h", "frp_modis", "frp_viirs"]].sum()
+        if len(w) * 26 / 1e6 <= MAX_JSON_MB * 2:         # world may be 2x bigger
+            break
+    cells = {}
+    for r in w.itertuples(index=False):
+        cells.setdefault(f"{r.I}_{r.J}", []).append(
+            [int(r.ym) - first, int(r.n_modis), int(r.n_viirs), short(r.h),
+             short(r.frp_modis, 0), short(r.frp_viirs, 0)])
+
+    n = max(len(d["modis"]) for d in dailies)
+    day_m, day_v, day_h = np.zeros(n), np.zeros(n), np.zeros(n)
+    for d in dailies:
+        day_m[:len(d["modis"])] += d["modis"]
+        day_v[:len(d["viirs"])] += [x or 0 for x in d["viirs"]]
+        day_h[:len(d["harmonized"])] += [x or 0 for x in d["harmonized"]]
+    first_viirs = (pd.Timestamp(VIIRS_START_DAY) - EPOCH).days - DAY0
+
+    st = (pd.concat(statics).sort_values("detections", ascending=False)
+          if statics else pd.DataFrame(columns=["lat", "lon", "detections"]))
+    data = {
+        "name": "World", "slug": "world", "firms_name": "World",
+        "bbox": [-180, -60, 180, 80], "cell_size": size,
+        "months": months,
+        "totals": {
+            "modis": total["modis"].astype(int).tolist(),
+            "viirs": [None if b else int(v) for b, v in zip(before_viirs, total["viirs"])],
+            "harmonized": [short(h) for h in total["h"]],
+            "frp_modis": [short(x, 0) for x in total["frp_modis"]],
+            "frp_viirs": [None if b else short(x, 0) for b, x in zip(before_viirs, total["frp_viirs"])],
+        },
+        "rates": rates, "rate_source": "world", "n_ratios": n_ratios,
+        "rates_terra": terra_rates,
+        "terra_only_months": [m for m in months if m < AQUA_START],
+        "validation": validation,
+        "cleaning": steps,
+        "static_cells": {"count": int(len(st)),
+                         "top": st.head(50)[["lat", "lon", "detections"]].values.tolist()},
+        "partial_months": {m: r for m, r in PARTIAL_MONTHS.items() if m in months},
+        "days_start": f"{HISTORY_START}-01",
+        "daily": {"modis": [int(x) for x in day_m],
+                  "viirs": [None if k < first_viirs else int(x) for k, x in enumerate(day_v)],
+                  "harmonized": [short(x) for x in day_h]},
+        "cell_fields": ["month_index", "modis", "viirs", "harmonized",
+                        "frp_modis_mw", "frp_viirs_mw"],
+        "cells": cells,
+    }
+    out = OUT_COUNTRY / "world.json"
+    out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    total_h = sum(h for h in data["totals"]["harmonized"] if h)
+    print(f"World: {len(aggs)} countries, {size} deg squares ({len(cells)} squares), "
+          f"{out.stat().st_size / 1e6:.1f} MB, {time.time() - t0:.0f} s")
+    return {"name": "World", "slug": "world", "bbox": data["bbox"],
+            "total_H": round(total_h),
+            "rate_avg": round(float(np.mean([r["rate"] for r in rates.values()])), 2),
+            "validation_error": validation["median_abs_error_pct"]}
+
+
+def run_world():
+    """Rebuild only world.json (and its line in countries.json) from saved work."""
+    from countries import firms_names
+    g = json.loads(GLOBAL_FILE.read_text())
+    aggs = {n: a for n in sorted(firms_names()) if (a := load_aggregates(n)) is not None}
+    entry = build_world(aggs, g["rate"], g["terra_rate"])
+    path = config.WEB_DATA_DIR / "countries.json"
+    listing = [c for c in json.loads(path.read_text(encoding="utf-8")) if c["slug"] != "world"]
+    path.write_text(json.dumps([entry] + listing, separators=(",", ":")), encoding="utf-8")
+
+
 def run_one(name, fresh):
     if fresh or load_aggregates(name) is None:
         if aggregate_country(name) is None:
@@ -954,9 +1085,13 @@ def main():
     ap.add_argument("--all", action="store_true", help="every country")
     ap.add_argument("--fresh", action="store_true",
                     help="re-read the zips, don't reuse saved work")
+    ap.add_argument("--world", action="store_true",
+                    help="rebuild only world.json from saved work")
     args = ap.parse_args()
     config.make_folders()
-    if args.country:
+    if args.world:
+        run_world()
+    elif args.country:
         run_one(args.country, args.fresh)
     elif args.all:
         run_all(args.fresh)

@@ -78,7 +78,6 @@
       <span class="chip" id="areaChip">Whole country</span>
       <button class="ghost-btn" id="resetAreaBtn" type="button" hidden>Whole country</button>
     </div>
-    <button class="ghost-btn case-btn" id="caseBtn" type="button">🔥 Case study: Chilecito fire, July 2026</button>
     <div class="loading" id="loading" role="status" aria-live="polite"></div>
   </section>
 
@@ -139,7 +138,6 @@
         <div id="map" role="region" aria-label="Map of fire hotspot squares"></div>
         <div class="map-msg" id="mapMsg" aria-live="polite"></div>
       </div>
-      <div class="case-cap" id="caseCap" hidden>Case study inspired by CONAE (Argentina) emergency maps</div>
       <div class="legend" id="mapLegend"></div>
     </div>
 
@@ -168,9 +166,21 @@
         <button class="play" type="submit">Use this box</button>
       </form>
 
-      <div class="field" id="dotsField" hidden>
-        <label class="toggle"><input type="checkbox" id="dotsToggle"><span class="dot" style="background:var(--viirs)"></span> Show fire dots</label>
-        <div class="small" id="dotsNote"></div>
+      <!-- Fire dots for the whole planet, any day since Nov 2000 (NASA GIBS) -->
+      <div class="field">
+        <label class="toggle"><input type="checkbox" id="fireToggle"><span class="dot" style="background:var(--modis)"></span> Fire dots, whole planet (NASA FIRMS)</label>
+        <div class="fire-row">
+          <button class="ghost-btn" id="firePrev" type="button" aria-label="Earlier dots">◀</button>
+          <label class="sr-only" for="fireDate">Date of the fire dots</label>
+          <input type="date" id="fireDate">
+          <button class="ghost-btn" id="fireNext" type="button" aria-label="Later dots">▶</button>
+        </div>
+        <div class="seg" id="fireSpan" role="group" aria-label="How many days of fire dots"><span class="thumb"></span></div>
+        <div class="fire-row">
+          <label class="toggle"><input type="checkbox" id="fireModis" checked><span class="dot" style="background:var(--modis)"></span> MODIS (from Nov 2000)</label>
+          <label class="toggle"><input type="checkbox" id="fireViirs" checked><span class="dot" style="background:var(--viirs)"></span> VIIRS (from 2012)</label>
+        </div>
+        <div class="small" id="fireNote"></div>
       </div>
 
       <!-- Satellite picture from NASA GIBS under the squares -->
@@ -252,7 +262,7 @@
       <div class="day-title" id="dTitle">…</div>
       <div class="day-sub" id="dSub"></div>
       <div class="stat-rows" id="dStats"></div>
-      <button class="ghost-btn" id="dayDotsBtn" type="button" hidden>Show this day's dots on the map</button>
+      <button class="ghost-btn" id="dayDotsBtn" type="button">Show this day's fire dots on the map</button>
     </div>
     <div class="card reveal">
       <div class="card-head"><h2>30 days around it</h2><span class="hint" id="dayHint">Whole country</span></div>
@@ -274,7 +284,6 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
           Monthly CSV
         </button>
-        <button class="ghost-btn" id="dlPoints" type="button" hidden>Fire dots CSV</button>
         <a class="ghost-btn" id="firmsLink" href="https://firms.modaps.eosdis.nasa.gov/download/" target="_blank" rel="noopener">Raw fire dots: FIRMS Archive Download ↗</a>
       </div>
     </div>
@@ -341,7 +350,8 @@
       <li><b>Recent months use near-real-time data</b>, which is checked less than the final archive data.</li>
       <li><b>Before July 2002 only one MODIS satellite (Terra) existed.</b> Those months use a separate "Terra-only" exchange rate. This is the least certain part of the history.</li>
       <li><b>Some places are not vegetation fires</b> even after cleaning: lava from volcanoes (Iceland, 2014 eruption), gas flares that are left in oil countries (Libya), or hot ground that MODIS sees but VIIRS does not (Djibouti, exchange rate 0). Countries with very few fires use the world median rate.</li>
-      <li><b>Daily numbers are for the whole country</b>, and the map squares are 0.1° (about 11 km), or 0.25° in very large countries.</li>
+      <li><b>Daily numbers are for the whole country</b>, and the map squares are 0.1° (about 11 km), or 0.25° in very large countries (2° on the world view).</li>
+      <li><b>The fire dots on the map are NASA's raw detections</b>, drawn by NASA GIBS: they are not cleaned (factories and gas flares show too) and can't be clicked. All counts, the calendar and the downloads use our cleaned data.</li>
     </ul>
     <div class="note-box" id="countryLimits" hidden></div>
   </section>
@@ -355,10 +365,9 @@
         <ul>
           <li><a href="https://www.earthdata.nasa.gov/data/tools/firms" target="_blank" rel="noopener">NASA FIRMS</a>: MODIS Collection 6.1 and VIIRS S-NPP 375 m active fire hotspots (yearly country files, 2000–2025)</li>
           <li><a href="https://firms.modaps.eosdis.nasa.gov/download/" target="_blank" rel="noopener">FIRMS Archive Download</a>: raw fire dots for any area and dates</li>
-          <li><a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>: satellite pictures on the map (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour)</li>
+          <li><a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>: satellite pictures (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour) and the daily fire-dot layers for the whole planet (MODIS and VIIRS Thermal Anomalies)</li>
           <li><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>: country borders (1:50m), used when processing</li>
           <li>Map tiles: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></li>
-          <li>Case study idea: <a href="https://www.argentina.gob.ar/ciencia/conae" target="_blank" rel="noopener">CONAE</a> (Argentina's space agency) emergency maps</li>
         </ul>
       </div>
       <div>

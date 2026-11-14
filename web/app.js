@@ -14,13 +14,15 @@
 */
 
 // ------------------------------------------------------------------ SETTINGS
-const DEFAULT_COUNTRY = "uzbekistan";
+const DEFAULT_COUNTRY = "world";            // first view: all countries together
 const DEFAULT_FROM = "2001-01";
 const NORMAL_YEARS = [2001, 2025];          // "normal" = median of these years
-const SHOWCASE = new Set(["uzbekistan", "argentina"]);   // have fire dots
-const MAX_DOT_MONTHS = 3;                    // dots only for short periods
-const MAX_DOTS = 15000;                      // more than this: show a sample
-const MAX_DOT_YEARS_CSV = 3;                 // dots CSV: at most 3 years
+// Fire dots for the whole planet: NASA FIRMS dots drawn by NASA GIBS (WMS).
+// We store nothing: NASA sends a picture of the dots for any day.
+const FIRE_WMS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi";
+const MODIS_FIRST = "2000-11-01", AQUA_FIRST = "2002-07-04";
+const VIIRS_FIRST = "2012-01-20", SNPP_LAST = "2026-11-02";   // then NOAA-20
+const SPANS = [["1", "1 day"], ["3", "3 days"], ["7", "7 days"], ["month", "1 month"]];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 const MONTHS_LONG = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 
@@ -45,13 +47,11 @@ const state = {
   squareMode: "harmonized",
   period: { kind: "range" },   // what the map shows: range | {month: i} | {day}
   day: null,            // 'YYYY-MM-DD' for the day view
-  dots: false,
+  fire: { on: false, date: null, span: "1", modis: true, viirs: true },  // planet dots
   normalMonth: 12,      // "this month vs normal": calendar month 1..12 ...
   normalYear: 2025,     // ... and the year to highlight
   gibs: { on: false, layer: "MODIS_Terra_CorrectedReflectance_Bands721", date: null },
-  caseStudy: false,     // true while the Chilecito case study is shown
 };
-const points = new Map();     // "slug/year" -> array of fire dots (CSV)
 
 // ------------------------------------------------------------------ HELPERS
 const $ = (id) => document.getElementById(id);
@@ -252,14 +252,12 @@ async function chooseCountry(slug) {
   if (state.from < data.months[0]) state.from = data.months[0];
   state.day = dayAt(data.daily.modis.length - 1);   // latest day with data
   state.period = { kind: "range" };
-  state.dots = false;
-  $("dotsToggle").checked = false;
   // "This month vs normal" starts at the latest month; the satellite
-  // picture date at the 15th of that month.
+  // picture and the fire dots start at the 15th of that month.
   state.normalMonth = +last.slice(5, 7);
   state.normalYear = +last.slice(0, 4);
   if (!state.gibs.date) state.gibs.date = last + "-15";
-  state.caseStudy = false;
+  if (!state.fire.date) state.fire.date = last + "-15";
   clearArea(false);
   setupDateInputs();
   buildSquares();
@@ -322,8 +320,17 @@ function buildControls() {
     map.fitBounds(layer.getBounds(), { padding: [20, 20] });
   });
 
-  // Dots
-  $("dotsToggle").addEventListener("change", (e) => { state.dots = e.target.checked; renderDots(); });
+  // Fire dots, whole planet: on/off, date, how many days, which sensors
+  const fire = state.fire;
+  $("fireToggle").addEventListener("change", (e) => { fire.on = e.target.checked; renderMap(); });
+  $("fireDate").addEventListener("change", (e) => { if (e.target.value) { fire.date = e.target.value; fire.on = true; renderMap(); } });
+  $("firePrev").addEventListener("click", () => stepFire(-1));
+  $("fireNext").addEventListener("click", () => stepFire(1));
+  $("fireModis").addEventListener("change", (e) => { fire.modis = e.target.checked; renderMap(); });
+  $("fireViirs").addEventListener("change", (e) => { fire.viirs = e.target.checked; renderMap(); });
+  makeSeg($("fireSpan"), SPANS, fire.span, (k) => { fire.span = k; fire.on = true; renderMap(); });
+  $("fireDate").min = MODIS_FIRST;
+  $("fireDate").max = dateOf(Date.now() - dayMs);   // yesterday: newer pictures don't exist yet
 
   // Day view
   $("dayInput").addEventListener("change", (e) => {
@@ -335,15 +342,14 @@ function buildControls() {
   $("dayNext").addEventListener("click", () => stepDay(1));
   $("dayDotsBtn").addEventListener("click", () => {
     state.period = { kind: "day", day: state.day };
-    state.dots = true;
-    $("dotsToggle").checked = true;
+    Object.assign(state.fire, { on: true, date: state.day, span: "1" });
+    setSeg($("fireSpan"), "1");
     renderMap();
     $("where").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
   });
 
   // Downloads
   $("dlMonthly").addEventListener("click", downloadMonthly);
-  $("dlPoints").addEventListener("click", downloadPoints);
 
   // This month vs normal: month picker
   $("normalMonth").innerHTML = MONTHS_LONG.map((m, k) => `<option value="${k + 1}">${m}</option>`).join("");
@@ -354,9 +360,6 @@ function buildControls() {
   $("gibsLayer").addEventListener("change", (e) => { state.gibs.layer = e.target.value; state.gibs.on = true; $("gibsToggle").checked = true; renderGibs(); renderMap(); });
   $("gibsDate").addEventListener("change", (e) => { if (e.target.value) { state.gibs.date = e.target.value; renderGibs(); } });
   $("gibsDate").max = dateOf(Date.now() - dayMs);   // yesterday: newer pictures don't exist yet
-
-  // Case study
-  $("caseBtn").addEventListener("click", caseStudy);
 }
 
 function setupDateInputs() {
@@ -433,7 +436,7 @@ function recolor() {
 
 // "the United Kingdom", "the Netherlands", but "Brazil"
 const NEEDS_THE = /^(United|Netherlands|Philippines|Bahamas|Gambia|Maldives|Czech|Dominican|Central African|Democratic|Republic|Solomon|Marshall|Cayman|Falkland|Faeroe|British|Virgin|Comoros|Seychelles)/;
-const countryName = () => (NEEDS_THE.test(state.c.name) ? "the " + state.c.name : state.c.name);
+const countryName = () => (isWorld() ? "the whole world" : NEEDS_THE.test(state.c.name) ? "the " + state.c.name : state.c.name);
 const areaName = () => (state.area ? `the drawn area in ${countryName()}` : countryName());
 
 function renderHeader() {
@@ -452,7 +455,8 @@ function renderHeader() {
   for (let k = 0; k < full; k++) dots += `<span class="ex-dot" style="animation-delay:${k * 60}ms"></span>`;
   if (part > 0.05 && full < 12) dots += `<span class="ex-dot part"><i style="width:${Math.round(part * 100)}%"></i></span>`;
   $("exDots").innerHTML = dots;
-  $("exCap").innerHTML = `VIIRS hotspots for every 1 MODIS hotspot in ${c.name} (the "exchange rate", average of 12 months)` +
+  $("exCap").innerHTML = `VIIRS hotspots for every 1 MODIS hotspot in ${countryName()} (the "exchange rate", average of 12 months)` +
+    (isWorld() ? ". Every country uses its own rate; pick a country to see it" : "") +
     (c.rate_source === "global" ? ". <b>Few fires here, so we use the world median rate.</b>" : "");
 }
 
@@ -496,7 +500,7 @@ function renderCards() {
   // Sentence built from the numbers
   const firstYear = c.months[a].slice(0, 4);
   let text = `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> is usually the busiest month. `;
-  if (top.length) text += `<b>${top[0][0]}</b> had the most fires since ${firstYear}. `;
+  if (top.length) text += `<b>${top[0][0]}</b> had the most fires of all the years from ${firstYear} to ${c.months[b].slice(0, 4)}. `;
   text += an === null
     ? `${monthLong(lm)} has no normal to compare with (almost no fires in past ${MONTHS_LONG[k]}s).`
     : Math.abs(Math.round(an)) < 1
@@ -525,6 +529,11 @@ function initMap() {
   // below the squares and dots. (Outside the tile pane, so dark mode doesn't
   // invert the picture's colours.)
   map.createPane("gibs").style.zIndex = 250;
+  // Fire dots above the squares (squares are in the 400 "overlay" pane).
+  // VIIRS dots get a CSS colour filter: NASA draws them orange, we show them purple.
+  map.createPane("firesV").style.zIndex = 440;
+  map.createPane("firesM").style.zIndex = 450;
+  map.getPane("firesV").classList.add("viirs-dots");
   squareLayer = L.layerGroup().addTo(map);
   dotLayer = L.layerGroup().addTo(map);
   drawnGroup = L.featureGroup().addTo(map);
@@ -547,6 +556,7 @@ function initMap() {
 }
 
 function fitCountry() {
+  if (isWorld()) { map.setView([20, 10], 2); return; }
   const [w, s, e, n] = state.c.bbox;
   if (e - w <= 180) { map.fitBounds([[s, w], [n, e]], { padding: [10, 10] }); return; }
   // Countries across the 180° line (Russia, Fiji...) have a box around the
@@ -624,14 +634,14 @@ function renderMap() {
   let leg = off ? `<span class="key">Squares hidden</span>`
     : `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} hotspots per ${state.c.cell_size}° square (1 → ${compact(max)})</span>`;
   if (state.selCells && !off) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
-  if (SHOWCASE.has(state.c.slug)) {
-    leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS dot</span>`;
-    leg += `<span class="key"><span class="dot" style="background:var(--viirs)"></span> VIIRS dot</span>`;
+  if (state.fire.on) {
+    if (state.fire.modis) leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS fire dot</span>`;
+    if (state.fire.viirs) leg += `<span class="key"><span class="dot" style="background:var(--viirs)"></span> VIIRS fire dot</span>`;
   }
   $("mapLegend").innerHTML = leg;
 
   renderAreaStats(a, b);
-  renderDots();
+  renderFire();
 }
 
 function squarePopup(key, latlng) {
@@ -657,10 +667,10 @@ function renderAreaStats(a, b) {
   for (let i = a; i <= b; i++) { sum[0] += s.modis[i]; sum[1] += s.viirs[i] || 0; sum[2] += s.h[i]; }
   const m = state.c.months;
   $("areaStats").innerHTML =
-    `<b>${state.area ? state.area.label : "Whole country"}</b> · ${keys.length.toLocaleString("en-US")} squares with fires<br>` +
+    `<b>${state.area ? state.area.label : isWorld() ? "Whole world" : "Whole country"}</b> · ${keys.length.toLocaleString("en-US")} squares with fires<br>` +
     `${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}: ` +
     `MODIS <b>${fmt(sum[0])}</b> · VIIRS <b>${m[b] < "2012-01" ? "no data" : fmt(sum[1])}</b> · harmonized <b>${fmt(sum[2])}</b>` +
-    (state.area ? `<br><span class="small">A drawn area uses ${state.c.name}'s exchange rates. Squares count if their centre is inside.</span>` : "");
+    (state.area ? `<br><span class="small">${isWorld() ? "Every square uses its own country's exchange rates." : `A drawn area uses ${state.c.name}'s exchange rates.`} Squares count if their centre is inside.</span>` : "");
 }
 
 // ---- Area (drawn shape or typed box)
@@ -685,91 +695,81 @@ function clearArea(removeLayer) {
   drawnGroup.clearLayers();
   state.area = null;
   state.selCells = null;
-  if (state.caseStudy) {            // the case study ends when its box goes:
-    state.squareMode = "harmonized";  // bring the squares back
-    setSeg($("squareSeg"), "harmonized");
-  }
-  state.caseStudy = false;
-  $("caseCap").hidden = true;
 }
 
-// ---- Fire dots (showcase countries)
-function loadPointsYear(slug, year) {
-  const key = `${slug}/${year}`;
-  if (points.has(key)) return Promise.resolve(points.get(key));
-  return new Promise((resolve) => {
-    Papa.parse(`data/points/${slug}/${year}.csv`, {
-      download: true, header: true, skipEmptyLines: true,
-      dynamicTyping: { lat: true, lon: true, frp: true },
-      complete: (res) => { points.set(key, res.data); resolve(res.data); },
-      error: () => { points.set(key, []); resolve([]); },
+// ---- Fire dots for the whole planet (NASA FIRMS, drawn by NASA GIBS)
+// For every day in the chosen window we add one transparent NASA picture
+// of that day's fire dots (MODIS and/or VIIRS). 1 month = ~31 pictures.
+let fireLayers = [], fireKey = "";
+
+// The days the dots cover: one day, 3 or 7 days around the date, or the month.
+function fireDays() {
+  const f = state.fire, d = f.date;
+  if (f.span === "month") {
+    const n = new Date(Date.UTC(+d.slice(0, 4), +d.slice(5, 7), 0)).getUTCDate();
+    return Array.from({ length: n }, (_, k) => `${d.slice(0, 7)}-${String(k + 1).padStart(2, "0")}`);
+  }
+  const n = +f.span, half = Math.floor(n / 2);
+  return Array.from({ length: n }, (_, k) => dateOf(toUTC(d) + (k - half) * dayMs));
+}
+
+// Which NASA layer for each sensor on a given day
+function fireLayersFor(day) {
+  const out = [];
+  if (state.fire.modis && day >= MODIS_FIRST)
+    out.push(["modis", day < AQUA_FIRST ? "MODIS_Terra_Thermal_Anomalies_All" : "MODIS_Combined_Thermal_Anomalies_All"]);
+  if (state.fire.viirs && day >= VIIRS_FIRST)
+    out.push(["viirs", day <= SNPP_LAST ? "VIIRS_SNPP_Thermal_Anomalies_375m_All" : "VIIRS_NOAA20_Thermal_Anomalies_375m_All"]);
+  return out;
+}
+
+function stepFire(dir) {
+  const f = state.fire;
+  if (f.span === "month") {
+    const y = +f.date.slice(0, 4), m = +f.date.slice(5, 7) - 1 + dir;
+    f.date = dateOf(Date.UTC(y, m, 15));
+  } else {
+    f.date = dateOf(toUTC(f.date) + dir * (+f.span) * dayMs);
+  }
+  f.date = f.date < MODIS_FIRST ? MODIS_FIRST : f.date > $("fireDate").max ? $("fireDate").max : f.date;
+  f.on = true;
+  renderMap();
+}
+
+function renderFire() {
+  const f = state.fire, yesterday = $("fireDate").max;
+  $("fireToggle").checked = f.on;
+  $("fireDate").value = f.date || "";
+  $("fireModis").checked = f.modis;
+  $("fireViirs").checked = f.viirs;
+  const days = f.on && f.date ? fireDays().filter((d) => d >= MODIS_FIRST && d <= yesterday) : [];
+  const wanted = days.flatMap((d) => fireLayersFor(d).map(([s, l]) => `${s}|${l}|${d}`));
+  const key = wanted.join(",");
+  if (key !== fireKey) {                      // only rebuild when something changed
+    fireLayers.forEach((l) => map.removeLayer(l));
+    fireLayers = wanted.map((w) => {
+      const [s, layer, day] = w.split("|");
+      return L.tileLayer.wms(FIRE_WMS, {
+        layers: layer, format: "image/png", transparent: true, version: "1.3.0", TIME: day,
+        pane: s === "modis" ? "firesM" : "firesV", maxZoom: 18,
+        attribution: 'Fire dots: NASA FIRMS via <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a>',
+      }).addTo(map);
     });
-  });
-}
-
-// Dates the dots cover: one day, or the map's months.
-function dotWindow() {
-  const p = state.period, m = state.c.months;
-  if (p.kind === "day") return [p.day, p.day];
-  const [a, b] = mapRange();
-  if (b - a + 1 > MAX_DOT_MONTHS) return null;
-  const end = new Date(Date.UTC(+m[b].slice(0, 4), +m[b].slice(5, 7), 0)).toISOString().slice(0, 10);
-  return [m[a] + "-01", end];
-}
-
-function insideArea(p) {
-  return !state.area || turf.booleanPointInPolygon(turf.point([p.lon, p.lat]), state.area.feature);
-}
-
-let dotsJob = 0;
-async function renderDots() {
-  const c = state.c, showcase = SHOWCASE.has(c.slug);
-  $("dotsField").hidden = !showcase;
-  $("dayDotsBtn").hidden = !showcase;
-  dotLayer.clearLayers();
-  $("mapMsg").textContent = "";
-  if (!showcase || !state.dots) { $("dotsNote").textContent = showcase ? "Every single fire detection, for a short period." : ""; return; }
-  const win = dotWindow();
-  if (!win) {
-    $("dotsNote").textContent = `Dots are shown for up to ${MAX_DOT_MONTHS} months: click a month in the calendar, or pick a day.`;
-    $("mapMsg").textContent = "Click a month in the calendar to see its fire dots";
-    return;
+    fireKey = key;
   }
-  const job = ++dotsJob;
-  const years = [...new Set([win[0].slice(0, 4), win[1].slice(0, 4)])];
-  $("mapMsg").textContent = "Loading fire dots…";
-  const rows = (await Promise.all(years.map((y) => loadPointsYear(c.slug, y)))).flat();
-  if (job !== dotsJob) return;          // the user changed something meanwhile
-  let pts = rows.filter((p) => p.date >= win[0] && p.date <= win[1] && insideArea(p));
-  const total = pts.length;
-  if (total > MAX_DOTS) { const step = Math.ceil(total / MAX_DOTS); pts = pts.filter((_, k) => k % step === 0); }
-  const colM = css("--modis"), colV = css("--viirs");
-  for (const p of pts) {
-    const isM = p.sensor === "MODIS";
-    L.circleMarker([p.lat, p.lon], {
-      renderer, radius: isM ? 4 : 2.6, weight: isM ? 1.6 : 0.6,
-      color: isM ? colM : "#ffffff", fillColor: isM ? colM : colV, fillOpacity: isM ? 0.25 : 0.9,
-    }).on("click", (e) => dotPopup(p, e.latlng)).addTo(dotLayer);
-  }
-  $("mapMsg").textContent = "";
-  $("dotsNote").textContent = total
-    ? `${fmt(total)} fire dots${total > MAX_DOTS ? ` (showing a sample of ${fmt(pts.length)})` : ""}. Click a dot for details.`
-    : "No fire dots in this area and period.";
+  // Explain what is shown
+  if (!f.on) { $("fireNote").textContent = "Every fire the satellites saw, for any day since November 2000, on the whole planet."; return; }
+  const label = f.span === "month" ? monthLong(f.date.slice(0, 7))
+    : days.length > 1 ? `${days[0]} – ${days[days.length - 1]}` : longDate(f.date);
+  const notes = [`Showing ${label} (${days.length} day${days.length === 1 ? "" : "s"}), whole planet.`];
+  if (f.viirs && days.length && days[days.length - 1] < VIIRS_FIRST) notes.push("VIIRS starts on 20 Jan 2012, so only MODIS dots here.");
+  if (!f.modis && !f.viirs) notes.push("Tick MODIS or VIIRS to see dots.");
+  notes.push("These are NASA's raw dots (not cleaned, so factories show too) and can't be clicked. Squares and the calendar use our cleaned data.");
+  $("fireNote").textContent = notes.join(" ");
 }
 
-function dotPopup(p, latlng) {
-  const sat = { N: "Suomi NPP", Terra: "Terra", Aqua: "Aqua", "1": "NOAA-20", N20: "NOAA-20" }[p.satellite] || p.satellite;
-  const conf = p.sensor === "VIIRS" ? ({ n: "nominal", h: "high", l: "low" }[p.confidence] || p.confidence) : p.confidence + "%";
-  const t = String(p.time).padStart(4, "0");
-  L.popup().setLatLng(latlng).setContent(
-    `<div class="pop"><b>${p.sensor} fire dot</b>
-     <div class="row"><span>Lat, lon</span><b>${p.lat.toFixed(4)}, ${p.lon.toFixed(4)}</b></div>
-     <div class="row"><span>Date</span><b>${p.date}</b></div>
-     <div class="row"><span>Time</span><b>${t.slice(0, 2)}:${t.slice(2)} UTC</b></div>
-     <div class="row"><span>Satellite</span><b>${sat}</b></div>
-     <div class="row"><span>Confidence</span><b>${conf}</b></div>
-     <div class="row"><span>Fire power (FRP)</span><b>${p.frp} MW</b></div></div>`).openOn(map);
-}
+// The world first view is a special "country"
+const isWorld = () => state.c && state.c.slug === "world";
 
 // ------------------------------------------------------------------ BURNING CALENDAR
 function calValue(i) {
@@ -871,6 +871,10 @@ function calTip(el) {
     state.normalMonth = +m.slice(5, 7);
     state.normalYear = +m.slice(0, 4);
     state.gibs.date = m + "-15";
+    if (state.fire.on) {                 // fire dots follow: the whole month
+      Object.assign(state.fire, { date: m + "-15", span: "month" });
+      setSeg($("fireSpan"), "month");
+    }
     renderMap();
     renderCalendar();
     renderNormal();
@@ -985,29 +989,6 @@ function renderGibs() {
     gibsUrl = url;
   }
   $("gibsNote").textContent = (g.on && g.date ? `Picture of ${longDate(g.date)}. ` : "") + note;
-}
-
-// ------------------------------------------------------------------ CASE STUDY: CHILECITO, JULY 2026
-async function caseStudy() {
-  await chooseCountry("argentina");
-  // Box around Chilecito, La Rioja (west, south, east, north = -69.7, -31.9, -65.4, -27.6)
-  const layer = L.rectangle([[-31.9, -69.7], [-27.6, -65.4]], { color: "#2f5bea", weight: 2, fillOpacity: 0.03 });
-  const i = state.c.months.indexOf("2026-07");
-  if (i >= 0) state.period = { kind: "month", mi: i };
-  state.normalMonth = 7;
-  state.normalYear = i >= 0 ? 2026 : 2025;
-  state.gibs = { on: true, layer: GIBS_MODIS, date: "2026-07-28" };
-  state.squareMode = "off";                 // squares off: show the burned land clearly
-  setSeg($("squareSeg"), "off");
-  useArea(layer, "Chilecito box (La Rioja)");
-  state.caseStudy = true;
-  // Zoom close to Chilecito: the red-orange burned land west of the town
-  // (Famatina range) is easy to see at this zoom; the box shows at the edges.
-  map.setView([-29.1, -67.6], 8, { animate: false });
-  $("caseCap").textContent = "Case study inspired by CONAE (Argentina) emergency maps" +
-    (i < 0 ? " · The satellite picture of 28 July 2026 is live; July 2026 fire counts arrive with the 2026 data update." : "");
-  $("caseCap").hidden = false;
-  $("where").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
 }
 
 // ------------------------------------------------------------------ PROOF CHART + THIS MONTH VS NORMAL
@@ -1188,9 +1169,6 @@ function monthlyRows() {
 }
 
 function renderTable() {
-  const showcase = SHOWCASE.has(state.c.slug);
-  $("dlPoints").hidden = !showcase;
-  $("firmsLink").hidden = showcase;
   $("tbody").innerHTML = monthlyRows().reverse().map((r) =>
     `<tr><td>${monthShort(r.month)}</td><td class="num">${fmt(r.modis_raw)}</td>` +
     `<td class="num ${r.viirs_raw === null ? "nd" : ""}">${r.viirs_raw === null ? "no data" : fmt(r.viirs_raw)}</td>` +
@@ -1211,20 +1189,6 @@ function downloadMonthly() {
   const rows = monthlyRows().map((r) => ({ country: state.c.name, area: state.area ? state.area.label : "whole country", ...r }));
   saveCSV(Papa.unparse(rows), fileTag() + "_monthly.csv");
   toast(`Downloaded ${rows.length} months`);
-}
-
-async function downloadPoints() {
-  const y0 = +state.from.slice(0, 4), y1 = +state.to.slice(0, 4);
-  if (y1 - y0 + 1 > MAX_DOT_YEARS_CSV) { toast(`Choose at most ${MAX_DOT_YEARS_CSV} years for the fire dots CSV`); return; }
-  setLoading("Preparing fire dots…");
-  const years = [];
-  for (let y = y0; y <= y1; y++) years.push(y);
-  const rows = (await Promise.all(years.map((y) => loadPointsYear(state.c.slug, y)))).flat();
-  const end = new Date(Date.UTC(+state.to.slice(0, 4), +state.to.slice(5, 7), 0)).toISOString().slice(0, 10);
-  const pts = rows.filter((p) => p.date >= state.from + "-01" && p.date <= end && insideArea(p));
-  setLoading("");
-  saveCSV(Papa.unparse(pts), fileTag() + "_fire_dots.csv");
-  toast(`Downloaded ${fmt(pts.length)} fire dots`);
 }
 
 // ------------------------------------------------------------------ SCROLL EFFECTS
