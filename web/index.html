@@ -45,8 +45,11 @@
     <a href="#overview">Overview</a>
     <a href="#where">Map</a>
     <a href="#calendar">Calendar</a>
+    <a href="#proof">Proof</a>
     <a href="#day">Day</a>
     <a href="#numbers">Data</a>
+    <a href="#how">How</a>
+    <a href="#sources">Sources</a>
   </nav>
   <button class="icon-btn" id="themeBtn" type="button" aria-label="Change theme"></button>
 </header>
@@ -75,6 +78,7 @@
       <span class="chip" id="areaChip">Whole country</span>
       <button class="ghost-btn" id="resetAreaBtn" type="button" hidden>Whole country</button>
     </div>
+    <button class="ghost-btn case-btn" id="caseBtn" type="button">🔥 Case study: Chilecito fire, July 2026</button>
     <div class="loading" id="loading" role="status" aria-live="polite"></div>
   </section>
 
@@ -135,6 +139,7 @@
         <div id="map" role="region" aria-label="Map of fire hotspot squares"></div>
         <div class="map-msg" id="mapMsg" aria-live="polite"></div>
       </div>
+      <div class="case-cap" id="caseCap" hidden>Case study inspired by CONAE (Argentina) emergency maps</div>
       <div class="legend" id="mapLegend"></div>
     </div>
 
@@ -168,6 +173,21 @@
         <div class="small" id="dotsNote"></div>
       </div>
 
+      <!-- Satellite picture from NASA GIBS under the squares -->
+      <div class="field">
+        <label class="toggle"><input type="checkbox" id="gibsToggle"><span class="dot" style="background:#b8532f"></span> Satellite picture (NASA GIBS)</label>
+        <div class="gibs-row">
+          <label class="sr-only" for="gibsLayer">Picture type</label>
+          <select id="gibsLayer">
+            <option value="MODIS_Terra_CorrectedReflectance_Bands721">MODIS Terra 7-2-1 (burned land looks reddish)</option>
+            <option value="VIIRS_NOAA20_CorrectedReflectance_TrueColor">VIIRS NOAA-20 true colour (from 2018)</option>
+          </select>
+          <label class="sr-only" for="gibsDate">Picture date</label>
+          <input type="date" id="gibsDate">
+        </div>
+        <div class="small" id="gibsNote">Clicking a month in the calendar sets the picture date to the 15th of that month.</div>
+      </div>
+
       <div class="note-box" id="areaStats" aria-live="polite"></div>
     </div>
   </section>
@@ -183,11 +203,45 @@
     <div class="scale" id="scale"></div>
   </section>
 
+  <!-- ============ PROOF + THIS MONTH VS NORMAL ============ -->
+  <section id="proof" class="grid-2 even">
+    <div class="card reveal">
+      <div class="card-head">
+        <h2><span class="num">3</span> Proof: does the exchange rate work?</h2>
+        <span class="hint">2012–2025, both satellites flying</span>
+      </div>
+      <div class="chartbox"><canvas id="proofChart" role="img" aria-label="Line chart, 2012 to 2025: raw MODIS, raw VIIRS and harmonized MODIS per month. The harmonized MODIS line follows the VIIRS line."></canvas></div>
+      <div class="legend">
+        <span class="key"><span class="line-key dotted" style="--k:var(--modis)"></span> MODIS raw</span>
+        <span class="key"><span class="line-key" style="background:var(--viirs);height:3px"></span> VIIRS raw</span>
+        <span class="key"><span class="dash"></span> Harmonized MODIS (rate × MODIS)</span>
+      </div>
+      <div class="note-box" id="proofNote" style="margin-top:12px"></div>
+    </div>
+    <div class="card reveal">
+      <div class="card-head">
+        <h2><span class="num">4</span> This month vs normal</h2>
+        <div class="ctrl">
+          <label class="lbl" for="normalMonth">Month</label>
+          <select id="normalMonth"></select>
+        </div>
+      </div>
+      <div class="chartbox"><canvas id="normalChart" role="img" aria-label="Bar chart: harmonized hotspots of the chosen calendar month in every year, with the normal (median) line and the middle-50% band"></canvas></div>
+      <div class="legend">
+        <span class="key"><span class="sw" style="background:var(--line-strong)"></span> each year</span>
+        <span class="key"><span class="sw" style="background:var(--brand-solid)"></span> chosen year</span>
+        <span class="key"><span class="dash" style="border-color:var(--ink)"></span> normal (median 2001–2025)</span>
+        <span class="key"><span class="sw" style="background:color-mix(in srgb, var(--harm) 25%, transparent)"></span> middle 50% of years (25–75%)</span>
+      </div>
+      <div class="note-box" id="normalNote" style="margin-top:12px"></div>
+    </div>
+  </section>
+
   <!-- ============ DAY VIEW ============ -->
   <section id="day" class="grid-2 even">
     <div class="card reveal day-card" aria-live="polite">
       <div class="card-head" style="margin-bottom:0">
-        <h2><span class="num">3</span> One day</h2>
+        <h2><span class="num">5</span> One day</h2>
         <div class="ctrl">
           <button class="ghost-btn" id="dayPrev" type="button" aria-label="Previous day">◀</button>
           <label class="sr-only" for="dayInput">Day</label>
@@ -204,8 +258,8 @@
       <div class="card-head"><h2>30 days around it</h2><span class="hint" id="dayHint">Whole country</span></div>
       <div class="chartbox small-chart"><canvas id="dayChart" role="img" aria-label="Line chart of daily hotspots for 30 days"></canvas></div>
       <div class="legend">
-        <span class="key"><span class="line-key" style="background:var(--modis)"></span> MODIS raw</span>
-        <span class="key"><span class="line-key" style="background:var(--viirs)"></span> VIIRS raw</span>
+        <span class="key"><span class="line-key dotted" style="--k:var(--modis)"></span> MODIS raw</span>
+        <span class="key"><span class="line-key" style="background:var(--viirs);height:3px"></span> VIIRS raw</span>
         <span class="key"><span class="dash"></span> Harmonized</span>
       </div>
     </div>
@@ -214,7 +268,7 @@
   <!-- ============ TABLE + DOWNLOADS ============ -->
   <section id="numbers" class="card reveal">
     <div class="card-head">
-      <h2><span class="num">4</span> Monthly numbers for your selection</h2>
+      <h2><span class="num">6</span> Monthly numbers for your selection</h2>
       <div class="ctrl">
         <button class="play" id="dlMonthly" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
@@ -233,8 +287,8 @@
   </section>
 
   <!-- ============ HOW IT WORKS ============ -->
-  <section class="card reveal">
-    <div class="card-head"><h2>How HotSync works</h2></div>
+  <section id="how" class="card reveal">
+    <div class="card-head"><h2>How HotSync works</h2><span class="hint" id="howCountry"></span></div>
     <div class="steps">
       <div class="step" style="--c:var(--modis)">
         <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg></div>
@@ -253,6 +307,71 @@
         <b>4. Show</b>Map, burning calendar, normal-vs-now, daily view and CSV downloads
       </div>
     </div>
+
+    <div class="how-grid">
+      <div>
+        <h3>Cleaning: only real fires stay</h3>
+        <div class="funnel" id="funnel"></div>
+      </div>
+      <div>
+        <h3>The exchange rate, month by month</h3>
+        <p class="small" id="rateSentence"></p>
+        <div class="tablewrap rate-wrap">
+          <table class="rate-table">
+            <thead><tr><th scope="col">Month</th><th scope="col">1 MODIS = … VIIRS</th><th class="num" scope="col">Middle 50%</th><th class="num" scope="col">Years</th><th class="num" scope="col">Terra only</th></tr></thead>
+            <tbody id="rateBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div>
+        <h3>The "hide the answer" test</h3>
+        <div id="validBox"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LIMITS ============ -->
+  <section id="limits" class="card reveal">
+    <div class="card-head"><h2>Limits: what HotSync can't tell you</h2></div>
+    <ul class="limits">
+      <li><b>No morning VIIRS pass.</b> MODIS flies over at about 10:30 (Terra) and 13:30 (Aqua), VIIRS only at about 13:30 (and at night). Fires that burn only in the morning are seen by MODIS but not by VIIRS. The exchange rate learns this on average, but not for every single day.</li>
+      <li><b>Clouds and smoke hide fires.</b> No satellite sees a fire under thick clouds or smoke, so a cloudy month can look quiet.</li>
+      <li><b>Small areas are noisy.</b> A drawn area with only a few fires per month gives jumpy numbers. A drawn area uses its country's exchange rates.</li>
+      <li><b>Hotspot counts are not burned area.</b> One big fire can make many hotspots; many small fires can make few. Fire power (FRP) helps, but it is not hectares burned.</li>
+      <li><b>Recent months use near-real-time data</b>, which is checked less than the final archive data.</li>
+      <li><b>Before July 2002 only one MODIS satellite (Terra) existed.</b> Those months use a separate "Terra-only" exchange rate. This is the least certain part of the history.</li>
+      <li><b>Some places are not vegetation fires</b> even after cleaning: lava from volcanoes (Iceland, 2014 eruption), gas flares that are left in oil countries (Libya), or hot ground that MODIS sees but VIIRS does not (Djibouti, exchange rate 0). Countries with very few fires use the world median rate.</li>
+      <li><b>Daily numbers are for the whole country</b>, and the map squares are 0.1° (about 11 km), or 0.25° in very large countries.</li>
+    </ul>
+    <div class="note-box" id="countryLimits" hidden></div>
+  </section>
+
+  <!-- ============ DATA & SOURCES ============ -->
+  <section id="sources" class="card reveal">
+    <div class="card-head"><h2>Data &amp; Sources</h2></div>
+    <div class="sources">
+      <div>
+        <h3>Data</h3>
+        <ul>
+          <li><a href="https://www.earthdata.nasa.gov/data/tools/firms" target="_blank" rel="noopener">NASA FIRMS</a>: MODIS Collection 6.1 and VIIRS S-NPP 375 m active fire hotspots (yearly country files, 2000–2025)</li>
+          <li><a href="https://firms.modaps.eosdis.nasa.gov/download/" target="_blank" rel="noopener">FIRMS Archive Download</a>: raw fire dots for any area and dates</li>
+          <li><a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>: satellite pictures on the map (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour)</li>
+          <li><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>: country borders (1:50m), used when processing</li>
+          <li>Map tiles: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></li>
+          <li>Case study idea: <a href="https://www.argentina.gob.ar/ciencia/conae" target="_blank" rel="noopener">CONAE</a> (Argentina's space agency) emergency maps</li>
+        </ul>
+      </div>
+      <div>
+        <h3>Tools</h3>
+        <ul>
+          <li>Website: <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> 1.9.4, <a href="https://github.com/geoman-io/leaflet-geoman" target="_blank" rel="noopener">Leaflet-Geoman</a> 2.17.0, <a href="https://turfjs.org/" target="_blank" rel="noopener">Turf.js</a> 7.1.0, <a href="https://www.chartjs.org/" target="_blank" rel="noopener">Chart.js</a> 4.4.1, <a href="https://www.papaparse.com/" target="_blank" rel="noopener">PapaParse</a> 5.4.1, font <a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener">Inter</a></li>
+          <li>Processing: Python with <a href="https://pandas.pydata.org/" target="_blank" rel="noopener">pandas</a>, <a href="https://numpy.org/" target="_blank" rel="noopener">NumPy</a>, <a href="https://arrow.apache.org/docs/python/" target="_blank" rel="noopener">PyArrow</a>, <a href="https://shapely.readthedocs.io/" target="_blank" rel="noopener">Shapely</a>, <a href="https://matplotlib.org/" target="_blank" rel="noopener">Matplotlib</a></li>
+          <li>Colour ramps: <a href="https://colorbrewer2.org/" target="_blank" rel="noopener">ColorBrewer</a> (YlOrRd, RdBu), colour-blind friendly</li>
+          <li>Code written with help from AI (Claude Code). The idea and the method choices are the team's.</li>
+        </ul>
+      </div>
+    </div>
+    <p class="ack">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).</p>
   </section>
 </main>
 

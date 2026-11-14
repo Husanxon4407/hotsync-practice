@@ -48,18 +48,24 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - Cards (total, busiest month, top 3 years, latest month vs normal + rank), auto summary sentence, day view + 30-day chart, monthly CSV, dots CSV (showcase) / FIRMS link.
 - Tested in Chrome: Uzbekistan, Brazil, UK, Argentina; box + drawn rectangle; dots; phone width (390 px, no sideways scroll); light/dark; no console errors.
 
+
+## 2026-11-14 ~21:00 · Stage 5: science, story and trust
+- Team decisions: keep the Terra-only rate on 2012–2025 (tested 2012–2019: <2% change); old prototype files deleted (still in git history).
+- Proof chart (2012–2025 MODIS raw, VIIRS raw, rate × MODIS) + hidden-years numbers; "this month vs normal" bar chart with median and 25–75% band.
+- NASA GIBS picture layer (MODIS Terra 7-2-1 / VIIRS NOAA-20 from 2018-01-05), date picker; calendar click sets the 15th of the month.
+- Case study button "Chilecito fire, July 2026": Argentina, box -69.7,-31.9,-65.4,-27.6, GIBS 7-2-1 of 2026-07-28, squares hidden, CONAE caption. Red-orange burned land visible west of Chilecito.
+- How HotSync works (country cleaning funnel, 12-month rate table with Terra-only, validation), Limits, Data & Sources with the exact FIRMS acknowledgement.
+- Accessibility: muted text 5.2:1, dark-mode button colour 5.3:1, anomaly text colours fixed, line patterns (dotted/solid/dashed), aria-labels on charts and Geoman buttons.
+
 ---
-## WHERE WE STOPPED (2026-11-14 evening) — read this first after a restart
-**Done:** Stages 0–4 (all committed on branch `full-history`). **Next:** Stage 5 (science, story and trust) — waiting for the team to type `go`.
+## WHERE WE STOPPED (2026-11-14 ~21:00) — read this first after a restart
+**Done:** Stages 0–5 (all committed on branch `full-history`). **Next:** Stage 6 (2026 data + GitHub robot every 6 h + live fires) — waiting for the team to type `go`.
 
-**Open questions for the team (answer before / at the start of Stage 5):**
-1. **Terra-only rate window:** Uzbekistan's top 3 years are 2002 · 2001 · 2004 — 2001–2002 are the Terra-only years. The Terra-only rate may be too high because it is learned on 2012–2025 and Terra's orbit has drifted since 2020 (fewer Terra detections). Proposal: learn it on 2012–2019 only. Not changed yet.
-2. **Old prototype files** no longer used by the site: `web/data/summary.json`, `process.py`, `data/processed/`, `data/raw/`, `DL_FIRE_*` folders. Delete or keep? (Plan: ask before deleting.)
-
-**Remember for later stages:**
-- Stage 6: do NOT rewrite the big country JSON files every 6 h (git history would grow ~1 GB/day). Keep 2026 in small separate files and merge in the browser.
-- `web/data` is 488 MB (plan said 300 MB); the team decided to keep it (GitHub Pages limit 1 GB, biggest file 26 MB).
-- Stage 5 "Limits" section should mention: Djibouti rate 0 (MODIS hot ground), Iceland 11.9 (lava), Libya 11.7 (gas flares left), Switzerland 1.2 (few fires); Terra-only rate is the least certain part.
-- Team decisions so far: new-factory static rule (≥10 months in one year) + ring of 8 neighbour squares; Terra-only rate before Jul 2002; FRP sums stored; sizes 0.1° / 0.25° only.
+**Remember for Stage 6:**
+- Do NOT rewrite the big country JSON files every 6 h (git history would grow ~1 GB/day). Proposal: keep 2026 in small separate files (e.g. `web/data/recent/`) and merge them in the browser; the robot only commits those small files.
+- `.env` has FIRMS_MAP_KEY (never print or commit it). The team must add the same key as a GitHub secret `FIRMS_MAP_KEY`.
+- S-NPP VIIRS stopped 2026-11-02 → NOAA-20 after that. Static cells list for the robot: `data/static_cells.csv`. Country polygons: `data/countries.geojson` (`countries.assign_country`).
+- The case study shows "July 2026 counts arrive with the 2026 update": after Stage 6 it should select July 2026.
+- `web/data` is 488 MB (team kept it; GitHub Pages limit 1 GB).
 
 **How to look at the site:** `cd web` → `..\.venv\Scripts\python -m http.server 8000` → http://localhost:8000

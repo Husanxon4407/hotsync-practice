@@ -46,6 +46,10 @@ const state = {
   period: { kind: "range" },   // what the map shows: range | {month: i} | {day}
   day: null,            // 'YYYY-MM-DD' for the day view
   dots: false,
+  normalMonth: 12,      // "this month vs normal": calendar month 1..12 ...
+  normalYear: 2025,     // ... and the year to highlight
+  gibs: { on: false, layer: "MODIS_Terra_CorrectedReflectance_Bands721", date: null },
+  caseStudy: false,     // true while the Chilecito case study is shown
 };
 const points = new Map();     // "slug/year" -> array of fire dots (CSV)
 
@@ -216,6 +220,7 @@ async function start() {
   buildControls();
   initMap();
   buildDayChart();
+  buildProofCharts();
   setupReveal();
   setupScrollSpy();
   await chooseCountry(DEFAULT_COUNTRY);
@@ -249,6 +254,12 @@ async function chooseCountry(slug) {
   state.period = { kind: "range" };
   state.dots = false;
   $("dotsToggle").checked = false;
+  // "This month vs normal" starts at the latest month; the satellite
+  // picture date at the 15th of that month.
+  state.normalMonth = +last.slice(5, 7);
+  state.normalYear = +last.slice(0, 4);
+  if (!state.gibs.date) state.gibs.date = last + "-15";
+  state.caseStudy = false;
   clearArea(false);
   setupDateInputs();
   buildSquares();
@@ -296,7 +307,7 @@ function buildControls() {
   // Calendar mode + square mode
   makeSeg($("calSeg"), [["harmonized", "Harmonized"], ["modis", "Raw MODIS"], ["viirs", "Raw VIIRS"], ["anomaly", "Anomaly"]],
     state.calMode, (k) => { state.calMode = k; renderCalendar(); });
-  makeSeg($("squareSeg"), [["harmonized", "Harmonized"], ["modis", "MODIS"], ["viirs", "VIIRS"]],
+  makeSeg($("squareSeg"), [["harmonized", "Harmonized"], ["modis", "MODIS"], ["viirs", "VIIRS"], ["off", "None"]],
     state.squareMode, (k) => { state.squareMode = k; renderMap(); });
 
   $("periodResetBtn").addEventListener("click", () => { state.period = { kind: "range" }; render(); });
@@ -333,6 +344,19 @@ function buildControls() {
   // Downloads
   $("dlMonthly").addEventListener("click", downloadMonthly);
   $("dlPoints").addEventListener("click", downloadPoints);
+
+  // This month vs normal: month picker
+  $("normalMonth").innerHTML = MONTHS_LONG.map((m, k) => `<option value="${k + 1}">${m}</option>`).join("");
+  $("normalMonth").addEventListener("change", (e) => { state.normalMonth = +e.target.value; renderNormal(); renderHow(); });
+
+  // Satellite picture (NASA GIBS)
+  $("gibsToggle").addEventListener("change", (e) => { state.gibs.on = e.target.checked; renderGibs(); renderMap(); });
+  $("gibsLayer").addEventListener("change", (e) => { state.gibs.layer = e.target.value; state.gibs.on = true; $("gibsToggle").checked = true; renderGibs(); renderMap(); });
+  $("gibsDate").addEventListener("change", (e) => { if (e.target.value) { state.gibs.date = e.target.value; renderGibs(); } });
+  $("gibsDate").max = dateOf(Date.now() - dayMs);   // yesterday: newer pictures don't exist yet
+
+  // Case study
+  $("caseBtn").addEventListener("click", caseStudy);
 }
 
 function setupDateInputs() {
@@ -393,12 +417,18 @@ function render() {
   renderCalendar();
   renderDay();
   renderTable();
+  renderProof();
+  renderNormal();
+  renderHow();
+  renderGibs();
 }
 
 // When the theme changes, things drawn with JS colours must be repainted.
 function recolor() {
   renderMap();
   applyDayChartColors();
+  renderProof();     // these two read their colours from CSS each time
+  renderNormal();
 }
 
 // "the United Kingdom", "the Netherlands", but "Brazil"
@@ -491,6 +521,10 @@ function initMap() {
     maxZoom: 18,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
+  // Own layer ("pane") for the NASA satellite picture: above the street map,
+  // below the squares and dots. (Outside the tile pane, so dark mode doesn't
+  // invert the picture's colours.)
+  map.createPane("gibs").style.zIndex = 250;
   squareLayer = L.layerGroup().addTo(map);
   dotLayer = L.layerGroup().addTo(map);
   drawnGroup = L.featureGroup().addTo(map);
@@ -502,6 +536,12 @@ function initMap() {
     drawRectangle: true, drawPolygon: true, editMode: true, removalMode: true,
   });
   map.pm.setPathOptions({ color: "#2f5bea", weight: 2, fillOpacity: 0.05 });
+  // Accessibility: Geoman puts the tool name on the box around each button,
+  // so screen readers can't read it. Copy it onto the button itself.
+  document.querySelectorAll(".leaflet-pm-toolbar .button-container").forEach((box) => {
+    const btn = box.querySelector("a.leaflet-buttons-control-button");
+    if (btn && box.title) btn.setAttribute("aria-label", box.title);
+  });
   map.on("pm:create", (e) => useArea(e.layer, e.shape === "Rectangle" ? "Drawn box" : "Drawn shape"));
   map.on("pm:remove", (e) => { if (state.area && e.layer === state.area.layer) { clearArea(true); render(); } });
 }
@@ -553,7 +593,8 @@ function squareSum(key, a, b) {
 
 function renderMap() {
   if (!state.c) return;
-  const [a, b] = mapRange(), f = FIELD[state.squareMode] - 1;
+  const [a, b] = mapRange(), off = state.squareMode === "off";
+  const f = off ? 2 : FIELD[state.squareMode] - 1;
   const vals = new Map();
   let max = 0;
   for (const key of squares.keys()) {
@@ -565,9 +606,11 @@ function renderMap() {
   for (const [key, rect] of squares) {
     const v = vals.get(key), k = seqClass(v, max);
     const inside = !state.selCells || state.selCells.has(key);
-    rect.setStyle(k < 0
+    // With a satellite picture under them, squares get see-through.
+    const full = state.gibs.on ? 0.35 : 0.85;
+    rect.setStyle(k < 0 || off            // "None": hide the squares (see the picture)
       ? { fillOpacity: 0, opacity: 0 }
-      : { fillColor: SEQ[k], color: edge, opacity: inside ? 0.6 : 0.1, fillOpacity: inside ? 0.85 : 0.15 });
+      : { fillColor: SEQ[k], color: edge, opacity: inside ? 0.6 : 0.1, fillOpacity: inside ? full : 0.1 });
   }
 
   // "The map shows ..." text
@@ -578,8 +621,9 @@ function renderMap() {
 
   // Legend
   const sq = { harmonized: "harmonized", modis: "raw MODIS", viirs: "raw VIIRS" }[state.squareMode];
-  let leg = `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} hotspots per ${state.c.cell_size}° square (1 → ${compact(max)})</span>`;
-  if (state.selCells) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
+  let leg = off ? `<span class="key">Squares hidden</span>`
+    : `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} hotspots per ${state.c.cell_size}° square (1 → ${compact(max)})</span>`;
+  if (state.selCells && !off) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
   if (SHOWCASE.has(state.c.slug)) {
     leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS dot</span>`;
     leg += `<span class="key"><span class="dot" style="background:var(--viirs)"></span> VIIRS dot</span>`;
@@ -641,6 +685,12 @@ function clearArea(removeLayer) {
   drawnGroup.clearLayers();
   state.area = null;
   state.selCells = null;
+  if (state.caseStudy) {            // the case study ends when its box goes:
+    state.squareMode = "harmonized";  // bring the squares back
+    setSeg($("squareSeg"), "harmonized");
+  }
+  state.caseStudy = false;
+  $("caseCap").hidden = true;
 }
 
 // ---- Fire dots (showcase countries)
@@ -753,7 +803,8 @@ function renderCalendar() {
         cls += " nodata"; label = "";
       } else if (anomalyMode) {
         if (v === null) { cls += " nodata"; label = "n/a"; }
-        else { const d = divClass(v); style = `background:${DIV[d]}`; if (d <= 1 || d >= 7) cls += " dark-txt"; label = pct(v); }
+        // white text only on the darkest blue and red (contrast >= 4.5:1)
+        else { const d = divClass(v); style = `background:${DIV[d]}`; if (d === 0 || d === DIV.length - 1) cls += " dark-txt"; label = pct(v); }
       } else {
         const k2 = seqClass(v, max, "sqrt");
         if (k2 >= 0) { style = `background:${SEQ[k2]}`; if (k2 >= 5) cls += " dark-txt"; }
@@ -814,10 +865,18 @@ function calTip(el) {
   cal.addEventListener("click", (e) => {
     const el = e.target.closest(".c");
     if (!el || el.dataset.i === "") return;
+    const m = el.dataset.m;
     state.period = { kind: "month", mi: +el.dataset.i };
+    // The same month also drives "this month vs normal" and the satellite picture date.
+    state.normalMonth = +m.slice(5, 7);
+    state.normalYear = +m.slice(0, 4);
+    state.gibs.date = m + "-15";
     renderMap();
     renderCalendar();
-    toast(`The map now shows ${monthLong(el.dataset.m)}`);
+    renderNormal();
+    renderHow();
+    renderGibs();
+    toast(`The map now shows ${monthLong(m)}`);
   });
 })();
 
@@ -867,9 +926,10 @@ function buildDayChart() {
   dayChart = new Chart($("dayChart"), {
     type: "line",
     data: { labels: [], datasets: [
-      { label: "MODIS raw", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25 },
-      { label: "VIIRS raw", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, spanGaps: false },
-      { label: "Harmonized", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, borderDash: [6, 4] },
+      // 3 different line patterns, so colour is never the only difference
+      { label: "MODIS raw", data: [], borderWidth: 2.5, pointRadius: 0, tension: 0.25, borderDash: [2, 3] },
+      { label: "VIIRS raw", data: [], borderWidth: 3, pointRadius: 0, tension: 0.25, spanGaps: false },
+      { label: "Harmonized", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, borderDash: [7, 4] },
     ] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
@@ -897,6 +957,223 @@ function applyDayChartColors() {
   sc.x.ticks.color = sc.y.ticks.color = css("--axis");
   sc.x.grid = { color: css("--grid") }; sc.y.grid = { color: css("--grid") };
   dayChart.update("none");
+}
+
+// ------------------------------------------------------------------ SATELLITE PICTURE (NASA GIBS)
+const GIBS_MODIS = "MODIS_Terra_CorrectedReflectance_Bands721";
+const NOAA20_FIRST_DAY = "2018-01-05";       // first VIIRS NOAA-20 picture in GIBS
+let gibsLayer = null, gibsUrl = "";
+
+function renderGibs() {
+  const g = state.gibs;
+  $("gibsToggle").checked = g.on;
+  $("gibsLayer").value = g.layer;
+  $("gibsDate").value = g.date || "";
+  let layer = g.layer, note = "Clicking a month in the calendar sets the picture date to the 15th of that month.";
+  if (layer !== GIBS_MODIS && g.date < NOAA20_FIRST_DAY) {
+    layer = GIBS_MODIS;
+    note = "VIIRS NOAA-20 pictures start on 5 January 2018, so MODIS 7-2-1 is shown for this date.";
+  }
+  const url = g.on && g.date
+    ? `https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/${layer}/default/${g.date}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg` : "";
+  if (url !== gibsUrl) {                    // only rebuild when something changed
+    if (gibsLayer) map.removeLayer(gibsLayer);
+    gibsLayer = url ? L.tileLayer(url, {
+      pane: "gibs", maxNativeZoom: 9, maxZoom: 18,
+      attribution: 'Imagery: <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a>',
+    }).addTo(map) : null;
+    gibsUrl = url;
+  }
+  $("gibsNote").textContent = (g.on && g.date ? `Picture of ${longDate(g.date)}. ` : "") + note;
+}
+
+// ------------------------------------------------------------------ CASE STUDY: CHILECITO, JULY 2026
+async function caseStudy() {
+  await chooseCountry("argentina");
+  // Box around Chilecito, La Rioja (west, south, east, north = -69.7, -31.9, -65.4, -27.6)
+  const layer = L.rectangle([[-31.9, -69.7], [-27.6, -65.4]], { color: "#2f5bea", weight: 2, fillOpacity: 0.03 });
+  const i = state.c.months.indexOf("2026-07");
+  if (i >= 0) state.period = { kind: "month", mi: i };
+  state.normalMonth = 7;
+  state.normalYear = i >= 0 ? 2026 : 2025;
+  state.gibs = { on: true, layer: GIBS_MODIS, date: "2026-07-28" };
+  state.squareMode = "off";                 // squares off: show the burned land clearly
+  setSeg($("squareSeg"), "off");
+  useArea(layer, "Chilecito box (La Rioja)");
+  state.caseStudy = true;
+  // Zoom close to Chilecito: the red-orange burned land west of the town
+  // (Famatina range) is easy to see at this zoom; the box shows at the edges.
+  map.setView([-29.1, -67.6], 8, { animate: false });
+  $("caseCap").textContent = "Case study inspired by CONAE (Argentina) emergency maps" +
+    (i < 0 ? " · The satellite picture of 28 July 2026 is live; July 2026 fire counts arrive with the 2026 data update." : "");
+  $("caseCap").hidden = false;
+  $("where").scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+}
+
+// ------------------------------------------------------------------ PROOF CHART + THIS MONTH VS NORMAL
+let proofChart, normalChart;
+function buildProofCharts() {
+  const base = {
+    responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
+    interaction: { mode: "index", intersect: false },
+    plugins: { legend: { display: false } },
+  };
+  proofChart = new Chart($("proofChart"), {
+    type: "line",
+    data: { labels: [], datasets: [
+      { label: "MODIS raw", data: [], borderWidth: 2, pointRadius: 0, borderDash: [2, 3] },
+      { label: "VIIRS raw", data: [], borderWidth: 3, pointRadius: 0 },
+      { label: "Harmonized MODIS (rate × MODIS)", data: [], borderWidth: 2, pointRadius: 0, borderDash: [7, 4] },
+    ] },
+    options: { ...base, scales: { x: { ticks: { maxTicksLimit: 8, autoSkip: true } }, y: { beginAtZero: true } } },
+  });
+  normalChart = new Chart($("normalChart"), {
+    type: "bar",
+    data: { labels: [], datasets: [
+      { type: "line", label: "25%", data: [], pointRadius: 0, borderWidth: 0, fill: false, order: 3 },
+      { type: "line", label: "middle 50% of years", data: [], pointRadius: 0, borderWidth: 0, fill: "-1", order: 3 },
+      { type: "line", label: "normal (median)", data: [], pointRadius: 0, borderWidth: 2, borderDash: [6, 4], order: 1 },
+      { type: "bar", label: "harmonized hotspots", data: [], borderRadius: 3, order: 2 },
+    ] },
+    options: { ...base, interaction: { mode: "index", intersect: false },
+      scales: { x: { ticks: { maxTicksLimit: 13 } }, y: { beginAtZero: true } },
+      onClick: (e, els) => {
+        if (!els.length) return;
+        state.normalYear = +normalChart.data.labels[els[0].index];
+        renderNormal();
+      } },
+  });
+}
+function chartChrome(ch) {
+  const sc = ch.options.scales;
+  sc.x.ticks.color = sc.y.ticks.color = css("--axis");
+  sc.x.grid = { color: css("--grid") }; sc.y.grid = { color: css("--grid") };
+}
+
+function renderProof() {
+  if (!proofChart || !state.c) return;
+  const c = state.c, s = state.series, rate = (m) => c.rates[String(+m.slice(5, 7))].rate;
+  const idx = c.months.map((m, i) => [m, i]).filter(([m]) => m >= "2012-02" && m <= "2025-12");
+  const ds = proofChart.data.datasets;
+  proofChart.data.labels = idx.map(([m]) => monthShort(m));
+  ds[0].data = idx.map(([, i]) => s.modis[i]);
+  ds[1].data = idx.map(([, i]) => s.viirs[i]);
+  ds[2].data = idx.map(([m, i]) => Math.round(rate(m) * s.modis[i]));
+  [ds[0].borderColor, ds[1].borderColor, ds[2].borderColor] = [css("--modis"), css("--viirs"), css("--harm")];
+  chartChrome(proofChart);
+  proofChart.update("none");
+
+  // How close are the lines (whole period)? And the honest hidden-years test.
+  const sumV = idx.reduce((t, [, i]) => t + (s.viirs[i] || 0), 0);
+  const sumH = ds[2].data.reduce((t, x) => t + x, 0);
+  const v = c.validation;
+  let html = `Over 2012–2025, harmonized MODIS adds up to <b>${sumV ? Math.round((sumH / sumV) * 100) : "–"}%</b> of the real VIIRS count ` +
+    `(100% = the lines match). These rates were learned on all of 2012–2025, so the lines should match. ` +
+    `<b>The fair test hides the answer:</b> rates learned only on 2015–2025 predicted the hidden 2012–2014 VIIRS months ` +
+    `from MODIS alone, off by <b>${v.median_abs_error_pct ?? "–"}%</b> in a typical month, r = <b>${v.pearson_r ?? "–"}</b>, ` +
+    `total bias <b>${pct(v.bias_pct)}</b>.`;
+  if (state.area) html += ` <i>(Test numbers are for the whole of ${countryName()}.)</i>`;
+  if (c.rate_source === "global") html += ` <i>Few fires here, so the world median rate is used: this test says little.</i>`;
+  $("proofNote").innerHTML = html;
+}
+
+function quantile(arr, q) {
+  const a = arr.filter((x) => x !== null && !Number.isNaN(x)).sort((x, y) => x - y);
+  if (!a.length) return null;
+  const pos = (a.length - 1) * q, lo = Math.floor(pos), hi = Math.ceil(pos);
+  return a[lo] + (a[hi] - a[lo]) * (pos - lo);
+}
+
+function renderNormal() {
+  if (!normalChart || !state.c) return;
+  const c = state.c, s = state.series, k = state.normalMonth;
+  $("normalMonth").value = String(k);
+  const rows = c.months.map((m, i) => [m, i]).filter(([m]) => +m.slice(5, 7) === k && m >= "2001-01");
+  const years = rows.map(([m]) => m.slice(0, 4));
+  const vals = rows.map(([, i]) => s.h[i]);
+  const base = rows.filter(([m]) => +m.slice(0, 4) <= NORMAL_YEARS[1]).map(([, i]) => s.h[i]);
+  const med = s.normal[k - 1], q25 = quantile(base, 0.25), q75 = quantile(base, 0.75);
+  if (!years.includes(String(state.normalYear))) state.normalYear = +years[years.length - 1];
+
+  const ds = normalChart.data.datasets, band = css("--harm");
+  normalChart.data.labels = years;
+  ds[0].data = years.map(() => q25);
+  ds[1].data = years.map(() => q75);
+  ds[1].backgroundColor = band + "40";
+  ds[2].data = years.map(() => med);
+  ds[2].borderColor = css("--ink");
+  ds[3].data = vals;
+  ds[3].backgroundColor = years.map((y) => (+y === state.normalYear ? css("--brand-solid") : css("--line-strong")));
+  chartChrome(normalChart);
+  normalChart.update("none");
+
+  const yi = years.indexOf(String(state.normalYear)), val = vals[yi];
+  const rank = 1 + vals.filter((x) => x > val).length;
+  const an = med > 0 ? ((val - med) / med) * 100 : null;
+  $("normalNote").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> (blue bar): ${fmt(val)} harmonized hotspots, ` +
+    `<b>${an === null ? "no normal to compare" : pct(an) + " vs normal"}</b> (normal = ${fmt(med)}). ` +
+    `${ordinal(rank)} highest ${MONTHS_LONG[k - 1]} of ${years.length} years. ` +
+    `Half of all years fall inside the green band (${fmt(q25)}–${fmt(q75)}). Click a bar to pick another year.`;
+}
+
+// ------------------------------------------------------------------ HOW HOTSYNC WORKS (this country's numbers)
+const STEP_NAMES = ["Only vegetation fires", "Confident detections", "Not a factory or gas flare"];
+
+function renderHow() {
+  const c = state.c;
+  $("howCountry").textContent = `Numbers for ${c.name}`;
+
+  // 1) Cleaning funnel, per sensor
+  $("funnel").innerHTML = ["MODIS", "VIIRS"].map((sensor) => {
+    const st = c.cleaning, loaded = st[0][sensor].before;
+    if (!loaded) return "";
+    let left = loaded;
+    const rows = [`<div class="f-row"><span class="name">Loaded from FIRMS</span><span class="bar"><i style="width:100%;background:var(--muted)"></i></span><span class="val">${fmt(loaded)}</span></div>`];
+    st.forEach((s, n) => {
+      left -= s[sensor].removed;
+      rows.push(`<div class="f-row ${n === st.length - 1 ? "final" : ""}" style="--i:${n + 1}"><span class="name" title="${s.step}">${STEP_NAMES[n] || s.step}</span>` +
+        `<span class="bar"><i style="width:${(left / loaded) * 100}%;background:var(--${sensor.toLowerCase()})"></i></span>` +
+        `<span class="val">${fmt(left)}<span class="rm">−${fmt(s[sensor].removed)}</span></span></div>`);
+    });
+    return `<div class="f-sensor"><div class="f-head"><b>${sensor}</b><span class="small">${Math.round((left / loaded) * 100)}% kept</span></div>${rows.join("")}</div>`;
+  }).join("") + `<p class="small">${fmt(c.static_cells.count)} "always hot" places of about 1 km were found and removed (with the squares around them).</p>`;
+
+  // 2) Exchange-rate table
+  const k = state.normalMonth, max = Math.max(...Object.values(c.rates).map((r) => r.rate), 1);
+  const r = c.rates[String(k)];
+  $("rateSentence").innerHTML = `In <b>${MONTHS_LONG[k - 1]}</b>, 1 MODIS hotspot = <b>${r.rate} VIIRS hotspots</b> in ${countryName()}. ` +
+    `VIIRS sees more because its pixels are smaller (375 m instead of 1 km). We use the median of the years, so one strange year can't move it much.` +
+    (c.rate_source === "global" ? ` <b>Few fires here: all months use the world median rate.</b>` : "");
+  $("rateBody").innerHTML = MONTHS_LONG.map((name, n) => {
+    const x = c.rates[String(n + 1)], t = c.rates_terra[String(n + 1)];
+    const tag = x.src === "pooled" ? " <span class='small'>(all-year median: too few years)</span>" : x.src === "global" ? " <span class='small'>(world rate)</span>" : "";
+    return `<tr class="${n + 1 === k ? "cur" : ""}"><td>${name.slice(0, 3)}</td>` +
+      `<td><span class="rbar"><i style="width:${(x.rate / max) * 70}px"></i><b>${x.rate}</b>${tag}</span></td>` +
+      `<td class="num">${x.q25 === null ? "–" : `${x.q25}–${x.q75}`}</td><td class="num">${x.n}</td><td class="num">${t.rate}</td></tr>`;
+  }).join("");
+
+  // 3) Validation ("hide the answer")
+  const v = c.validation, e = v.median_abs_error_pct;
+  const word = e === null ? "not enough fires to test" : e < 15 ? "very good" : e < 30 ? "good" : "rough (few fires)";
+  $("validBox").innerHTML =
+    `<div class="valid-num">` +
+    `<div><b>${e ?? "–"}%</b><span>typical month off by</span></div>` +
+    `<div><b>${v.pearson_r ?? "–"}</b><span>correlation r (1 = perfect)</span></div>` +
+    `<div><b>${pct(v.bias_pct)}</b><span>total bias</span></div>` +
+    `<div><b>${v.loyo_mean_error_pct ?? "–"}%</b><span>leave-one-year-out (${v.loyo_years} years)</span></div></div>` +
+    `<p class="small">We <b>hid</b> the real VIIRS numbers for Feb 2012 – Dec 2014, learned the exchange rates only from 2015–2025, ` +
+    `and predicted the hidden months from MODIS. Then we compared with the real VIIRS: <b>${word}</b>. ` +
+    `Leave-one-year-out does the same for every year 2012–2025, one at a time.</p>`;
+
+  // 4) A country note in "Limits" when this country's numbers need care
+  const avg = Object.values(c.rates).reduce((t, x) => t + x.rate, 0) / 12;
+  const notes = [];
+  if (c.rate_source === "global") notes.push("it has very few fires, so it uses the world median exchange rate");
+  if (avg < 1.5) notes.push(`its exchange rate is unusually low (${avg.toFixed(1)}): MODIS sees hot places here that VIIRS does not count as fires`);
+  if (avg > 10) notes.push(`its exchange rate is unusually high (${avg.toFixed(1)}): non-vegetation heat (lava, gas flares) may be left in the data`);
+  if (e !== null && e > 40) notes.push(`the hidden-years test is rough (${e}%), so harmonized years before 2012 are less certain`);
+  $("countryLimits").hidden = !notes.length;
+  $("countryLimits").innerHTML = notes.length ? `<b>Note for ${c.name}:</b> ${notes.join("; ")}.` : "";
 }
 
 // ------------------------------------------------------------------ TABLE + DOWNLOADS
