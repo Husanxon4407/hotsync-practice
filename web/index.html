@@ -29,7 +29,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261115a">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -429,6 +429,7 @@
 <div class="tip" id="tip" role="tooltip"></div>
 <div class="toast" id="toast" role="status"></div>
 
-<script src="app.js"></script>
+<!-- ?v=... makes browsers load the new file after every update (change it each time) -->
+<script src="app.js?v=20261115a"></script>
 </body>
 </html>
