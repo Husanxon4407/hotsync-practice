@@ -408,7 +408,9 @@ async function copyLink() {
   writeHash();
   const url = location.href;
   try {
-    await navigator.clipboard.writeText(url);
+    // Some browsers ask for permission and wait: give up after 1.5 s and use the old way.
+    await Promise.race([navigator.clipboard.writeText(url),
+      new Promise((_, no) => setTimeout(() => no(new Error("slow")), 1500))]);
   } catch (e) {
     const t = document.createElement("textarea");
     t.value = url; document.body.appendChild(t); t.select();
