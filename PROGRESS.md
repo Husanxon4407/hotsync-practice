@@ -109,16 +109,29 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - index.html loads app.js/style.css with ?v=… (change it on every update) so browsers don't keep old code for 10 min.
 - My Chrome automation can open the live https site (not localhost): test there after each upload.
 
+
+## 2026-11-15 ~00:45 · Stage 8: final checks, README, SUBMISSION, merge to main
+- Checks: check_all_countries.py (0 bad months; only Djibouti rate 0, known); 2026: 318/318 days with sources,
+  31 NOAA-20 days, last complete day 2026-11-13; live site files all load; World view verified in Chrome.
+- README.md rewritten (what, method, run, files, sources + acknowledgement, AI note, team), screenshot assets/screenshot.jpg.
+- SUBMISSION.md: project name, summary, description, use of AI, data & resources, 30-second video script.
+- `full-history` merged into `main` (fast-forward) and pushed; GitHub Pages switched back to `main`.
+- The robot's schedule (every 2 days) is active now that the workflow is on `main`.
+
 ---
-## WHERE WE STOPPED (2026-11-14 ~22:30) — read this first after a restart
-**Stage 6 is done (browser check on the live site by the team). Stage 7: extra 1 done; next extra 2 (print report).** Code committed (ed19044), not pushed.
-**Running overnight:** `python update_recent.py --fill-gaps 2026-01-01 --skip-live` (backfill, limited by the FIRMS key: ~3–4 h).
-If it stopped: just run the same command again (it only fetches missing days).
-**Then:**
-1. Check every day file has MODIS and VIIRS > 0 (a check script is in the chat; 2026-03-02..06 were re-fetched).
-2. `python update_recent.py --recent` (refresh last days + live layer), commit `data/recent_days web/data/recent web/data/live`.
-3. Team adds GitHub secret `FIRMS_MAP_KEY` (Settings → Secrets and variables → Actions → New repository secret).
-4. Push → the push trigger runs the robot once on GitHub → check it is green and commits only when data changed.
-5. Browser tests (my Chrome automation can't open localhost any more; the team tests in their own Chrome).
-Remember: the schedule + "Run workflow" button work only after the merge to `main` (Stage 8).
-**GitHub Pages now publishes from `full-history`** (team asked to share the site, 2026-11-14 ~23:25). In Stage 8: merge into `main`, then switch Pages back to `main`.
+## HANDOVER (read this first) — 2026-11-15
+**Everything is on `main`.** Live site: https://husanxon4407.github.io/hotsync-practice/ (opens on World).
+
+**To work on it:** `git clone https://github.com/Husanxon4407/hotsync-practice.git` (or `git pull` on `main`),
+then `cd web` → `python -m http.server 8000` → http://localhost:8000. Only plain Python is needed to view the site.
+To re-process data you need the 7 GB of FIRMS zips (`python download_firms.py`) and `pip install -r requirements.txt`.
+
+**After every website change:** bump the version in `web/index.html` (`app.js?v=…`, `style.css?v=…`), so browsers load the new files.
+
+**The robot** (`.github/workflows/update.yml`) runs every 2 days on `main` and needs the secret `FIRMS_MAP_KEY`
+(already set). "Run workflow" button: GitHub → Actions → Update fire data. It commits only when data changed.
+
+**Ideas not done yet (Stage 7 extras 2–7, optional):** print/PDF "Fire report", exchange-rate world map,
+fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
+**Known to improve:** World file is 16.7 MB (first load ~5 s; plan target 3 s) → e.g. 3° squares or no FRP in world squares.
+**Year end:** see README "When a year ends".
