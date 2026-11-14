@@ -70,15 +70,26 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - Added a "Real fire numbers" row (like the first prototype): MODIS / VIIRS real detections after cleaning, busiest day (click → day view), fire strength (average FRP per detection).
 - Sharing: team decided to follow the plan and share the live site later (nothing pushed yet; GitHub still shows the old prototype). Note: Stage 6's robot runs on GitHub, so the branch will need to be pushed then (ask first).
 
+
+## 2026-11-14 ~22:30 · Stage 6 (in progress): current-year robot
+- Team decisions: current year in small separate files (history never changes); robot every **48 h**;
+  when a year ends, download its yearly FIRMS zips and run process_all.py so it joins the fixed history.
+- `update_recent.py` (SP or NRT per day; S-NPP → NOAA-20 after 2026-11-02 and on S-NPP gap days, e.g. early March 2026),
+  same cleaning as history, polygons, one file per day in `data/recent_days/` (re-fetch replaces it: no double counting —
+  tested), waits when the FIRMS key hits 5000 transactions / 10 min, `--fill-gaps`. A failed download is never saved as 0.
+- Website: 2026 joined in the browser, month in progress (so far vs same days of past years), "Updated X ago",
+  live 48 h clickable dots (140k dots, 4.7 MB). Workflow `.github/workflows/update.yml` (every 2 days; push trigger for testing).
+- Branch `full-history` uploaded to GitHub up to commit 0fa8c9b; commit ed19044 (Stage 6 code) NOT pushed yet.
+
 ---
-## WHERE WE STOPPED (2026-11-14 ~23:30) — read this first after a restart
-**Done:** Stages 0–5 (+ the "every place the same" update), all committed on branch `full-history`. **Next:** Stage 6 (2026 data + GitHub robot every 6 h + live fires) — waiting for the team to type `go`.
-
-**Remember for Stage 6:**
-- Do NOT rewrite the big country JSON files every 6 h (git history would grow ~1 GB/day). Proposal: keep 2026 in small separate files (e.g. `web/data/recent/`) and merge them in the browser; the robot only commits those small files. The World file must get 2026 too (sum of countries).
-- Live layer (last 48 h, clickable dots) for the WHOLE world, the same for every place.
-- `.env` has FIRMS_MAP_KEY (never print or commit it). The team must add the same key as a GitHub secret `FIRMS_MAP_KEY`.
-- S-NPP VIIRS stopped 2026-11-02 → NOAA-20 after that. Static cells list for the robot: `data/static_cells.csv`. Country polygons: `data/countries.geojson` (`countries.assign_country`).
-- Every place is treated the same: no "showcase" countries anywhere.
-
-**How to look at the site:** `cd web` → `..\.venv\Scripts\python -m http.server 8000` → http://localhost:8000
+## WHERE WE STOPPED (2026-11-14 ~22:30) — read this first after a restart
+**Stage 6 is half done.** Code committed (ed19044), not pushed.
+**Running overnight:** `python update_recent.py --fill-gaps 2026-01-01 --skip-live` (backfill, limited by the FIRMS key: ~3–4 h).
+If it stopped: just run the same command again (it only fetches missing days).
+**Then:**
+1. Check every day file has MODIS and VIIRS > 0 (a check script is in the chat; 2026-03-02..06 were re-fetched).
+2. `python update_recent.py --recent` (refresh last days + live layer), commit `data/recent_days web/data/recent web/data/live`.
+3. Team adds GitHub secret `FIRMS_MAP_KEY` (Settings → Secrets and variables → Actions → New repository secret).
+4. Push → the push trigger runs the robot once on GitHub → check it is green and commits only when data changed.
+5. Browser tests (my Chrome automation can't open localhost any more; the team tests in their own Chrome).
+Remember: the schedule + "Run workflow" button work only after the merge to `main` (Stage 8).
