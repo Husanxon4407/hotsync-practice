@@ -123,7 +123,7 @@
     </div>
     <div class="card lift prism-hover kpi reveal" style="--c:var(--viirs)">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
-      <div><div class="t">Latest month vs normal <button class="q" type="button" data-tip="The last complete month compared with its 'normal' value: the median of the same calendar month over 2001–2025.">?</button></div>
+      <div><div class="t">Last month in your range vs normal <button class="q" type="button" data-tip="The last month of your chosen dates compared with its 'normal': the median of the same calendar month over 2001–2025. A month still in progress is compared day by day: its complete days vs the same days of 2001–2025.">?</button></div>
       <div class="n" id="kLatest">…</div><div class="s" id="kLatestS"></div></div>
     </div>
   </section>
@@ -138,7 +138,7 @@
     </div>
     <div class="card lift prism-hover kpi reveal" style="--c:var(--viirs)">
       <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 2 1.3 3 2.3 3C11 9 11 6 12 3z"/></svg></div>
-      <div><div class="t">VIIRS real fires <button class="q" type="button" data-tip="VIIRS: the newer camera (Suomi NPP from 2012, NOAA-20 after Nov 2026). Small pixels, about 375 m, so it sees many small fires MODIS misses.">?</button></div>
+      <div><div class="t">VIIRS real fires <button class="q" type="button" data-tip="VIIRS: the newer camera (Suomi NPP: data from 20 Jan 2012; NOAA-20 after Nov 2026). Harmonized numbers = real VIIRS from Feb 2012. Small pixels, about 375 m, so it sees many small fires MODIS misses.">?</button></div>
       <div class="n" id="kViirs">…</div><div class="s" id="kViirsS"></div></div>
     </div>
     <div class="card lift prism-hover kpi clickable reveal" id="kBusyDayCard" role="button" tabindex="0" style="--c:var(--r4)" title="Click to open this day">
@@ -210,7 +210,7 @@
         <div class="seg" id="fireSpan" role="group" aria-label="How many days of fire dots"><span class="thumb"></span></div>
         <div class="fire-row">
           <label class="toggle"><input type="checkbox" id="fireModis" checked><span class="dot" style="background:var(--modis)"></span> MODIS (from Nov 2000)</label>
-          <label class="toggle"><input type="checkbox" id="fireViirs" checked><span class="dot" style="background:var(--viirs)"></span> VIIRS (from 2012)</label>
+          <label class="toggle"><input type="checkbox" id="fireViirs" checked><span class="dot" style="background:var(--viirs)"></span> VIIRS (from 20 Jan 2012)</label>
         </div>
         <div class="small" id="fireNote"></div>
       </div>
@@ -377,12 +377,14 @@
     <ul class="limits">
       <li><b>No morning VIIRS pass.</b> MODIS flies over at about 10:30 (Terra) and 13:30 (Aqua), VIIRS only at about 13:30 (and at night). Fires that burn only in the morning are seen by MODIS but not by VIIRS. The exchange rate learns this on average, but not for every single day.</li>
       <li><b>Clouds and smoke hide fires.</b> No satellite sees a fire under thick clouds or smoke, so a cloudy month can look quiet.</li>
-      <li><b>Small areas are noisy.</b> A drawn area with only a few fires per month gives jumpy numbers. A drawn area uses its country's exchange rates.</li>
+      <li><b>Small areas are noisy.</b> A drawn area with only a few fires per month gives jumpy numbers. A drawn area uses its country's exchange rates (on the World view, every square uses its own country's rates).</li>
       <li><b>Hotspot counts are not burned area.</b> One big fire can make many hotspots; many small fires can make few. Fire power (FRP) helps, but it is not hectares burned.</li>
       <li><b>Recent months use near-real-time data</b>, which is checked less than the final archive data.</li>
       <li><b>Before July 2002 only one MODIS satellite (Terra) existed.</b> Those months use a separate "Terra-only" exchange rate. This is the least certain part of the history.</li>
       <li><b>Some places are not vegetation fires</b> even after cleaning: lava from volcanoes (Iceland, 2014 eruption), gas flares that are left in oil countries (Libya), or hot ground that MODIS sees but VIIRS does not (Djibouti, exchange rate 0). Countries with very few fires use the world median rate.</li>
-      <li><b>Daily numbers are for the whole country</b>, and the map squares are 0.1° (about 11 km), or 0.25° in very large countries (2° on the world view).</li>
+      <li><b>Daily numbers are for the whole country (or the whole world)</b>, and the map squares are 0.1° (about 11 km), or 0.25° in very large countries (2° on the world view).</li>
+      <li><b>MODIS satellites are old and their orbits have drifted.</b> Since about 2023 MODIS sees fewer fires than before. This does not change harmonized numbers after 2012 (they are real VIIRS), but Raw MODIS looks low in recent years.</li>
+      <li><b>Some 2026 days use the other VIIRS satellite (NOAA-20)</b>, when Suomi NPP sent no data or only part of a day (and after Suomi NPP stopped on 2 Nov 2026). Those days are adjusted to the Suomi NPP scale with a factor learned on days when both satellites flew. They are marked in the calendar and the day view.</li>
       <li><b>The fire dots on the map are NASA's raw detections</b>, drawn by NASA GIBS: they are not cleaned (factories and gas flares show too) and can't be clicked. All counts, the calendar and the downloads use our cleaned data.</li>
     </ul>
     <div class="note-box" id="countryLimits" hidden></div>

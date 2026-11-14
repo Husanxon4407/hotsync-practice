@@ -62,6 +62,10 @@ PAUSE = 2                         # seconds between calls (be polite)
 TRIES = 3                         # then skip with a warning
 WORLD_CELL = 2.0                  # world squares, same as world.json
 LIVE_MAX_MB = 5                   # bigger: keep only nominal/high confidence
+FACTOR_FILE = REPO / "data" / "noaa20_factor.json"   # NOAA-20 -> S-NPP factors
+MIN_FACTOR_FIRES = 300            # fewer NOAA-20 fires in a country: use the world factor
+FACTOR_REF_DAYS = 24              # days with BOTH satellites used to learn the factor
+COMPLETE_AFTER_H = 12             # a day is complete when fetched >= 12 h after it ended
 
 # Same cleaning rules as the history (process_all.py)
 MODIS_MIN_CONF = 30
@@ -342,7 +346,12 @@ def update_days(firms, days):
                             f"NOAA-20 has {int(alt_rows['v'].sum()):,}: using NOAA-20")
                         rows, v_src[d] = alt_rows, alt_src[d]
             write_day(d, rows)
-            sources[d] = {"modis": m_src.get(d), "viirs": v_src.get(d)}
+            vs = v_src.get(d) or ""
+            sources[d] = {"modis": m_src.get(d), "viirs": vs or None,
+                          # which VIIRS satellite: S-NPP is the reference; NOAA-20
+                          # days are adjusted with the learned factor (rebuild)
+                          "viirs_sat": "NOAA20" if "NOAA20" in vs else "SNPP",
+                          "fetched_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
             for s, n in (("MODIS", int(rows["m"].sum())), ("VIIRS", int(rows["v"].sum()))):
                 src = (m_src if s == "MODIS" else v_src).get(d) or "none"
                 report.setdefault(src, [0, 0])
@@ -368,6 +377,74 @@ def write_if_changed(path, obj):
     return True
 
 
+def load_factors():
+    """NOAA-20 -> S-NPP factors (learned with --learn-factor). 1.0 if not learned yet."""
+    if FACTOR_FILE.exists():
+        return json.loads(FACTOR_FILE.read_text())
+    say("  NOTE: no NOAA-20 factor learned yet (run --learn-factor); using 1.0")
+    return {"world": 1.0, "countries": {}}
+
+
+def last_complete_day(days, sources):
+    """The last day (in a row from the start) whose data is complete.
+
+    Standard (SP) data is final. Near-real-time data is complete when it was
+    fetched at least 12 hours after the day ended (late satellite passes).
+    """
+    last = None
+    for d in days:
+        s = sources.get(d) or {}
+        srcs = [x for x in (s.get("modis"), s.get("viirs")) if x]
+        if srcs and all(x.endswith("_SP") for x in srcs):
+            ok = True
+        elif s.get("fetched_at"):
+            end = datetime.fromisoformat(d + "T00:00:00+00:00") + timedelta(days=1)
+            got = datetime.fromisoformat(s["fetched_at"].replace("Z", "+00:00"))
+            ok = got >= end + timedelta(hours=COMPLETE_AFTER_H)
+        else:
+            ok = False
+        if not ok:
+            break
+        last = d
+    return last
+
+
+def learn_factor(firms):
+    """Learn NOAA-20 -> S-NPP: on days where BOTH flew, count each country's
+    clean fires from both satellites. factor = S-NPP / NOAA-20."""
+    sizes = json.loads(CELL_SIZES.read_text())
+    avail = firms.availability()
+    sources = json.loads(SOURCES_FILE.read_text())
+    snpp = sorted(d for d, s in sources.items() if d > HISTORY_END and (s or {}).get("viirs_sat") == "SNPP"
+                  and (DAYS_DIR / f"{d}.csv.gz").exists() and noaa20_source(avail, d))
+    if not snpp:
+        sys.exit("No S-NPP days to learn from.")
+    step = max(1, len(snpp) // FACTOR_REF_DAYS)
+    ref = snpp[::step][:FACTOR_REF_DAYS]
+    say(f"Learning the NOAA-20 factor on {len(ref)} days ({ref[0]} .. {ref[-1]})")
+    sn, n20 = {}, {}
+    for d in ref:
+        df = firms.area(noaa20_source(avail, d), d, 1)
+        if df is None:
+            continue
+        a = count_day(None, clean(df, "VIIRS"), sizes).groupby("slug")["v"].sum()
+        b = pd.read_csv(DAYS_DIR / f"{d}.csv.gz").groupby("slug")["v"].sum()
+        for slug in set(a.index) | set(b.index):
+            n20[slug] = n20.get(slug, 0) + int(a.get(slug, 0))
+            sn[slug] = sn.get(slug, 0) + int(b.get(slug, 0))
+        say(f"  {d}: S-NPP {int(b.sum()):,}  NOAA-20 {int(a.sum()):,}")
+    world = sum(sn.values()) / max(1, sum(n20.values()))
+    countries = {s: round(sn[s] / n20[s], 3) for s in n20 if n20[s] >= MIN_FACTOR_FIRES and sn[s] > 0}
+    FACTOR_FILE.write_text(json.dumps({
+        "about": "VIIRS NOAA-20 fires x factor = S-NPP scale. factor = S-NPP / NOAA-20 "
+                 "on days when both satellites flew (clean fires). Countries with fewer "
+                 f"than {MIN_FACTOR_FIRES} NOAA-20 fires use the world factor.",
+        "learned_on": ref, "world": round(world, 4), "countries": countries,
+        "fires": {"snpp": sum(sn.values()), "noaa20": sum(n20.values())}}, indent=1))
+    say(f"World factor {world:.3f} (S-NPP {sum(sn.values()):,} / NOAA-20 {sum(n20.values()):,}); "
+        f"{len(countries)} countries with their own factor")
+
+
 def rebuild():
     sizes = json.loads(CELL_SIZES.read_text())
     files = sorted(p for p in DAYS_DIR.glob("*.csv.gz") if p.name[:10] > HISTORY_END)
@@ -386,6 +463,15 @@ def rebuild():
     have_days = {p.name[:10] for p in files}
     changed = 0
 
+    # NOAA-20 days -> S-NPP scale (per country factor, world factor if few fires)
+    fac = load_factors()
+    sat = {d: (sources.get(d) or {}).get("viirs_sat", "SNPP") for d in have_days}
+    noaa = allrows["day"].map(lambda d: sat.get(d) == "NOAA20")
+    f = np.where(noaa, allrows["slug"].map(lambda x: fac["countries"].get(x, fac["world"])), 1.0)
+    allrows["v"] = allrows["v"] * f
+    allrows["fv"] = allrows["fv"] * f
+    last_complete = last_complete_day(sorted(have_days), sources)
+
     for year in sorted({d[:4] for d in have_days}):
         first = f"{year}-01-01"
         n = (date.fromisoformat(min(last_day, f"{year}-12-31")) - date.fromisoformat(first)).days + 1
@@ -400,7 +486,7 @@ def rebuild():
             arr = {k: [0] * n for k in ("m", "v", "fm", "fv")}
             for r in g.itertuples(index=False):
                 k = idx[r.day]
-                arr["m"][k], arr["v"][k] = int(r.m), int(r.v)
+                arr["m"][k], arr["v"][k] = int(r.m), int(round(r.v))
                 arr["fm"][k], arr["fv"][k] = int(round(r.fm)), int(round(r.fv))
             countries[slug] = arr
         world = {k: [sum(c[k][i] for c in countries.values()) for i in range(n)]
@@ -409,6 +495,8 @@ def rebuild():
         missing = [d for d in days if d not in have_days]
         daily = {"year": int(year), "days_start": first, "n_days": n,
                  "missing_days": missing,
+                 "noaa20_days": [d for d in days if sat.get(d) == "NOAA20"],
+                 "noaa20_factor_world": round(fac["world"], 3),
                  "sources": {d: sources.get(d) for d in days if d in sources},
                  "countries": countries}
         changed += write_if_changed(RECENT / year / "daily.json", daily)
@@ -417,13 +505,13 @@ def rebuild():
         for month, gm in yr.groupby(yr["day"].str[:7]):
             cells = gm.groupby(["slug", "i", "j"], as_index=False)[["m", "v", "fm", "fv"]].sum()
             for slug, g in cells.groupby("slug"):
-                obj = {f"{r.i}_{r.j}": [int(r.m), int(r.v), int(round(r.fm)), int(round(r.fv))]
+                obj = {f"{r.i}_{r.j}": [int(r.m), int(round(r.v)), int(round(r.fm)), int(round(r.fv))]
                        for r in g.itertuples(index=False)}
                 changed += write_if_changed(RECENT / year / "cells" / month / f"{slug}.json", obj)
             f = (WORLD_CELL / cells["slug"].map(sizes)).round().astype(int)
             w = cells.assign(I=np.floor_divide(cells["i"], f), J=np.floor_divide(cells["j"], f))
             w = w.groupby(["I", "J"], as_index=False)[["m", "v", "fm", "fv"]].sum()
-            obj = {f"{r.I}_{r.J}": [int(r.m), int(r.v), int(round(r.fm)), int(round(r.fv))]
+            obj = {f"{r.I}_{r.J}": [int(r.m), int(round(r.v)), int(round(r.fm)), int(round(r.fv))]
                    for r in w.itertuples(index=False)}
             changed += write_if_changed(RECENT / year / "cells" / month / "world.json", obj)
 
@@ -432,6 +520,8 @@ def rebuild():
     old = json.loads(meta_path.read_text()) if meta_path.exists() else {}
     meta = {"history_end": HISTORY_END, "years": [int(y) for y in years],
             "last_day_with_data": last_day,
+            # days after this one may still be loading (near-real-time)
+            "last_complete_day": last_complete,
             # the time only moves when the data really changed
             "last_updated": (datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
                              if changed or not old else old.get("last_updated"))}
@@ -502,11 +592,17 @@ def main():
                     help="fetch only the days from this date that have no file yet")
     ap.add_argument("--skip-live", action="store_true")
     ap.add_argument("--live-only", action="store_true")
+    ap.add_argument("--learn-factor", action="store_true",
+                    help="learn the NOAA-20 -> S-NPP factor (then rebuild)")
     args = ap.parse_args()
     firms = Firms(read_key())
     t0 = time.time()
     today = datetime.now(timezone.utc).date()
 
+    if args.learn_factor:
+        learn_factor(firms)
+        rebuild()
+        return
     if not args.live_only:
         if args.backfill or args.fill_gaps:
             first = date.fromisoformat(args.backfill or args.fill_gaps)

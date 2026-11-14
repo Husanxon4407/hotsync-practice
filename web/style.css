@@ -539,6 +539,12 @@ a.ghost-btn { color: var(--ink); text-decoration: none; }
 /* Current month still in progress: dashed outline in the calendar */
 .cal .c.inprog { outline: 2px dashed var(--ink); outline-offset: -2px; }
 .scale .inprog-key { background: var(--r0); outline: 2px dashed var(--ink); outline-offset: -2px; }
+/* Month that used the other VIIRS satellite (NOAA-20) on some days: a small
+   corner triangle (black + white edge so it shows on every colour) */
+.cal .c.n20::before { content: ""; position: absolute; left: 2px; bottom: 2px; width: 0; height: 0;
+  border-left: 7px solid #111; border-top: 7px solid transparent; filter: drop-shadow(0 0 1px #fff); }
+.scale .mark.n20-key { border-radius: 0; background: none; border: 0; width: 0; height: 0;
+  border-left: 9px solid #111; border-top: 9px solid transparent; filter: drop-shadow(0 0 1px #fff); }
 .chip.updated { border-color: color-mix(in srgb, var(--harm) 45%, var(--line)); }
 .live-dot { background: var(--viirs); box-shadow: 0 0 0 3px color-mix(in srgb, var(--viirs) 30%, transparent); animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--viirs) 0%, transparent); } }

@@ -81,6 +81,23 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
   live 48 h clickable dots (140k dots, 4.7 MB). Workflow `.github/workflows/update.yml` (every 2 days; push trigger for testing).
 - Branch `full-history` uploaded to GitHub up to commit 0fa8c9b; commit ed19044 (Stage 6 code) NOT pushed yet.
 
+
+## 2026-11-14 ~23:30 · Stage 6: robot green on GitHub + review fixes (13 items)
+- Robot runs on GitHub: 2 test runs green (42 s, 6 API calls); commits only real changes (fixed Windows/Linux zip bytes).
+- 2026 backfill complete and checked (318 days; S-NPP partial days → NOAA-20, e.g. 3 Aug 2026).
+- Review fixes (team list of 13):
+  1–2 `renderCards()`: last month IN THE RANGE; wording by range length; Top 3 = full years only (≥2), Terra-only years marked "*";
+      busiest month without the month in progress; card renamed "Last month in your range vs normal".
+  3 `renderHeader()`: exchange rate follows the range, weighted by MODIS (Σ rate×MODIS / Σ MODIS); "Not needed for these dates" from Feb 2012;
+      safe for rate 0 (Djibouti) and world-rate countries.
+  4 `update_recent.py`: every day gets a source (+ viirs_sat, fetched_at); NOAA-20 → S-NPP factor per country (world factor if < 300 fires),
+      learned on 24 days when both flew (`--learn-factor`, `data/noaa20_factor.json`); website marks NOAA-20 days/months.
+  5 `last_complete_day` in meta.json (NRT day complete 12 h after it ended); `soFar()` uses complete days only; "(partial day, still loading)".
+  6 `picDate()`: picture/dot dates never after yesterday.  7 `onDates()`: boxes show the real order after a swap.
+  8 `renderRealStats()`: "(VIIRS starts 20 Jan 2012)" only for ranges before Feb 2012; per-year without the month in progress.
+  9 World wording ("Whole world"). 10 `renderProof()`: why not 100% + verdict word. 11 `mergeRecent()`: nulls if a year file fails.
+  12 Limits: MODIS orbit drift + NOAA-20 days. 13 `check_all_countries.py`.
+
 ---
 ## WHERE WE STOPPED (2026-11-14 ~22:30) — read this first after a restart
 **Stage 6 is half done.** Code committed (ed19044), not pushed.

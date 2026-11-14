@@ -4,7 +4,7 @@
   Reads the files that process_all.py made:
     data/countries.json          list of countries (for the country picker)
     data/country/<slug>.json     one country: monthly totals, squares, daily
-    data/points/<slug>/<y>.csv   every fire dot (showcase countries only)
+    data/recent/...              the current year (made by update_recent.py)
   No numbers are typed in here: everything comes from those files.
 
   The big idea: ONE "state" object holds what the user picked (country,
@@ -17,6 +17,7 @@
 const DEFAULT_COUNTRY = "world";            // first view: all countries together
 const DEFAULT_FROM = "2001-01";
 const NORMAL_YEARS = [2001, 2025];          // "normal" = median of these years
+const AQUA_START = "2002-07";                // before this: Terra-only MODIS months
 // Fire dots for the whole planet: NASA FIRMS dots drawn by NASA GIBS (WMS).
 // We store nothing: NASA sends a picture of the dots for any day.
 const FIRE_WMS = "https://gibs.earthdata.nasa.gov/wms/epsg3857/best/wms.cgi";
@@ -88,6 +89,9 @@ const toUTC = (d) => Date.UTC(+d.slice(0, 4), +d.slice(5, 7) - 1, +d.slice(8, 10
 const dateOf = (ms) => new Date(ms).toISOString().slice(0, 10);
 const dayIndex = (d) => Math.round((toUTC(d) - toUTC(state.c.days_start)) / dayMs);
 const dayAt = (i) => dateOf(toUTC(state.c.days_start) + i * dayMs);
+// Satellite pictures and fire dots exist up to YESTERDAY: never ask for a later day.
+const yesterday = () => dateOf(Date.now() - dayMs);
+const picDate = (d) => (d > yesterday() ? yesterday() : d);
 const longDate = (d) => new Date(toUTC(d)).toLocaleDateString("en-US", { timeZone: "UTC", weekday: "long", day: "numeric", month: "long", year: "numeric" });
 
 const median = (arr) => {
@@ -240,8 +244,17 @@ async function mergeRecent(c) {
   const dailies = await Promise.all(years.map(loadRecentDaily));
 
   // Daily numbers: the current year after the history (VIIRS = harmonized from 2012)
-  dailies.forEach((d) => {
-    if (!d) return;
+  c.noaa20Days = new Set();
+  dailies.forEach((d, yk) => {
+    if (!d) {
+      // This year's file did not load: add "no data" days, so the position of
+      // every later day stays right (day index = days since days_start).
+      const y = years[yk], last = lastDay < `${y}-12-31` ? lastDay : `${y}-12-31`;
+      const n = Math.round((toUTC(last) - toUTC(`${y}-01-01`)) / dayMs) + 1;
+      for (let k = 0; k < n; k++) { c.daily.modis.push(null); c.daily.viirs.push(null); c.daily.harmonized.push(null); }
+      return;
+    }
+    (d.noaa20_days || []).forEach((x) => c.noaa20Days.add(x));
     const mine = d.countries[c.slug], missing = new Set(d.missing_days || []);
     for (let k = 0; k < d.n_days; k++) {
       const day = dateOf(toUTC(d.days_start) + k * dayMs);
@@ -276,7 +289,18 @@ async function mergeRecent(c) {
     for (const [key, [mo, vi, fm, fv]] of Object.entries(cellObjs[k])) (c.cells[key] ||= []).push([mi, mo, vi, vi, fm, fv]);
   });
   c.recentLastDay = lastDay;
-  c.inProgress = lastDay < monthEnd(lastDay.slice(0, 7)) ? lastDay.slice(0, 7) : null;
+  // The newest day may still be loading (near-real-time data). Only days up
+  // to last_complete_day are complete; without that mark, the last day is partial.
+  c.lastComplete = recent.meta.last_complete_day || dateOf(toUTC(lastDay) - dayMs);
+  c.inProgress = lastDay < monthEnd(lastDay.slice(0, 7)) || c.lastComplete < lastDay ? lastDay.slice(0, 7) : null;
+}
+// How many days of month m used the other VIIRS satellite (NOAA-20)?
+function noaa20In(m) {
+  const c = state.c;
+  if (!c.noaa20Days) return 0;
+  let n = 0;
+  c.noaa20Days.forEach((d) => { if (d.startsWith(m)) n++; });
+  return n;
 }
 
 // "Updated 3 hours ago · data to 14 Nov 2026"
@@ -346,8 +370,8 @@ async function chooseCountry(slug) {
   // picture and the fire dots start at the 15th of that month.
   state.normalMonth = +last.slice(5, 7);
   state.normalYear = +last.slice(0, 4);
-  if (!state.gibs.date) state.gibs.date = last + "-15";
-  if (!state.fire.date) state.fire.date = last + "-15";
+  if (!state.gibs.date) state.gibs.date = picDate(last + "-15");
+  if (!state.fire.date) state.fire.date = picDate(last + "-15");
   clearArea(false);
   setupDateInputs();
   buildSquares();
@@ -375,8 +399,9 @@ function buildControls() {
   const onDates = () => {
     let a = $("fromMonth").value, b = $("toMonth").value;
     if (!a || !b) return;
-    if (a > b) [a, b] = [b, a];   // the user swapped them: fix it quietly
+    if (a > b) [a, b] = [b, a];   // the user swapped them: fix it...
     state.from = a; state.to = b;
+    setupDateInputs();            // ...and show the real order in the boxes
     state.period = { kind: "range" };
     render();
   };
@@ -518,18 +543,33 @@ function computeSeries() {
 }
 const anomaly = (i) => {
   const s = state.series, m = state.c.months[i], k = +m.slice(5, 7);
-  // A month still in progress is compared with the SAME DAYS of past years.
   if (s.h[i] === null || s.h[i] === undefined) return null;     // no data
-  const nm = m === state.c.inProgress ? soFar(k).normal : s.normal[k - 1];
+  if (m === state.c.inProgress) {
+    // A month still in progress: its COMPLETE days vs the same days of past years.
+    const sf = soFar(k);
+    return sf.D > 0 && sf.normal > 0 ? ((sf.value - sf.normal) / sf.normal) * 100 : null;
+  }
+  const nm = s.normal[k - 1];
   return nm > 0 ? ((s.h[i] - nm) / nm) * 100 : null;
 };
 
-// The unfinished month: days 1..D. For each year 2001-2025, add up the
-// harmonized daily numbers of the same days; "normal" = the median.
-// (Daily numbers are for the whole country; a drawn area is scaled by its
-// share of the country's normal for the full month.)
+// The unfinished month: complete days 1..D (the last, partial day is left out).
+// For each year 2001-2025, add up the harmonized daily numbers of the same
+// days; "normal" = the median. Daily numbers are for the whole country/world;
+// a drawn area is scaled by its share.
 function soFar(k) {
-  const c = state.c, d = c.daily.harmonized, D = +c.recentLastDay.slice(8, 10), vals = [];
+  const c = state.c, d = c.daily.harmonized, vals = [];
+  const m = c.inProgress;
+  // complete days of the month in progress (0 if even day 1 is still loading)
+  const D = c.lastComplete && c.lastComplete.slice(0, 7) === m ? +c.lastComplete.slice(8, 10)
+    : c.lastComplete && c.lastComplete > m ? 31 : 0;
+  // this year's value for days 1..D (and the share of the month-to-date it is)
+  let value = 0, mtd = 0;
+  const j0 = dayIndex(m + "-01");
+  for (let i = j0; i < d.length && dayAt(i).startsWith(m); i++) {
+    mtd += d[i] || 0;
+    if (i - j0 < D) value += d[i] || 0;
+  }
   for (let y = NORMAL_YEARS[0]; y <= NORMAL_YEARS[1]; y++) {
     const i0 = dayIndex(`${y}-${String(k).padStart(2, "0")}-01`);
     if (i0 < 0 || i0 + D > d.length) continue;
@@ -543,8 +583,11 @@ function soFar(k) {
       .filter(([m]) => +m.slice(5, 7) === k && +m.slice(0, 4) >= NORMAL_YEARS[0] && +m.slice(0, 4) <= NORMAL_YEARS[1])
       .map(([, i]) => c.totals.harmonized[i]));
     normal = full > 0 ? normal * state.series.normal[k - 1] / full : null;
+    // the area's own month-to-date, cut to the complete days the same way
+    const i = c.months.indexOf(m), areaMtd = state.series.h[i] || 0;
+    value = mtd > 0 ? areaMtd * value / mtd : 0;
   }
-  return { normal, vals, D };
+  return { normal, vals, D, value };
 }
 
 // ------------------------------------------------------------------ RENDER
@@ -580,21 +623,41 @@ function renderHeader() {
   const c = state.c;
   $("heroArea").textContent = state.area ? `${c.name} · ${state.area.label}` : c.name;
   $("heroRange").textContent = `${monthShort(state.from)} – ${monthShort(state.to)}`;
-  $("areaChip").textContent = state.area ? state.area.label : "Whole country";
+  const whole = isWorld() ? "Whole world" : "Whole country";
+  $("areaChip").textContent = state.area ? state.area.label : whole;
+  $("resetAreaBtn").textContent = whole;
   $("resetAreaBtn").hidden = !state.area;
 
-  // Exchange-rate picture: 1 MODIS ring = N VIIRS dots (average of 12 months)
-  const rates = Object.values(c.rates).map((r) => r.rate);
-  const avg = rates.reduce((a, b) => a + b, 0) / rates.length;
+  // Exchange-rate picture: 1 MODIS ring = N VIIRS dots, for YOUR dates:
+  // the rate of each month in the range, weighted by its MODIS fires
+  // (sum of rate x MODIS / sum of MODIS). Terra-only months use their own rate.
+  const s = state.series, [a, b] = rangeIdx();
+  let num = 0, den = 0;
+  const plain = [];
+  for (let i = a; i <= b; i++) {
+    const m = c.months[i], k = String(+m.slice(5, 7));
+    const r = (m < AQUA_START ? c.rates_terra : c.rates)[k];
+    const rate = r && Number.isFinite(r.rate) ? r.rate : null;
+    if (rate === null) continue;
+    plain.push(rate);
+    const mo = s.modis[i] || 0;
+    num += rate * mo; den += mo;
+  }
+  let avg = den > 0 ? num / den : plain.length ? plain.reduce((x, y) => x + y, 0) / plain.length : 0;
+  if (!Number.isFinite(avg)) avg = 0;
   $("exNum").textContent = avg.toFixed(1);
   const full = Math.min(12, Math.floor(avg)), part = avg - Math.floor(avg);
   let dots = "";
   for (let k = 0; k < full; k++) dots += `<span class="ex-dot" style="animation-delay:${k * 60}ms"></span>`;
   if (part > 0.05 && full < 12) dots += `<span class="ex-dot part"><i style="width:${Math.round(part * 100)}%"></i></span>`;
   $("exDots").innerHTML = dots;
-  $("exCap").innerHTML = `VIIRS hotspots for every 1 MODIS hotspot in ${countryName()} (the "exchange rate", average of 12 months)` +
-    (isWorld() ? ". Every country uses its own rate; pick a country to see it" : "") +
-    (c.rate_source === "global" ? ". <b>Few fires here, so we use the world median rate.</b>" : "");
+  const notes = [];
+  if (c.months[a] >= "2012-02") notes.push("<b>Not needed for these dates: VIIRS was flying, so harmonized = real VIIRS.</b>");
+  if (isWorld()) notes.push("Every country uses its own rate; pick a country to see it.");
+  if (c.rate_source === "global") notes.push("<b>Few fires here, so we use the world median rate.</b>");
+  if (avg === 0) notes.push("<b>Rate 0:</b> MODIS sees hot places here that VIIRS does not count as fires, so MODIS-only years become 0.");
+  $("exCap").innerHTML = `VIIRS hotspots for every 1 MODIS hotspot in ${countryName()}, for your dates ` +
+    `(the "exchange rate": each month's rate, weighted by its MODIS fires).` + (notes.length ? "<br>" + notes.join(" ") : "");
 }
 
 // ------------------------------------------------------------------ SUMMARY CARDS + SENTENCE
@@ -602,17 +665,21 @@ function renderHeader() {
 // no exchange rate), like the cards of the first prototype.
 function renderRealStats() {
   const c = state.c, s = state.series, [a, b] = rangeIdx();
-  let mo = 0, vi = 0, fm = 0, fv = 0, viMonths = 0;
+  // Totals include everything; "per year" uses FULL months only (the month
+  // still in progress would make the average too low).
+  let mo = 0, vi = 0, fm = 0, fv = 0, moFull = 0, viFull = 0, moMonths = 0, viMonths = 0;
   for (let i = a; i <= b; i++) {
-    mo += s.modis[i]; fm += s.frpM[i];
-    if (s.viirs[i] !== null) { vi += s.viirs[i]; fv += s.frpV[i]; viMonths++; }
+    const done = c.months[i] !== c.inProgress;
+    if (s.modis[i] !== null) { mo += s.modis[i]; fm += s.frpM[i]; if (done) { moFull += s.modis[i]; moMonths++; } }
+    if (s.viirs[i] !== null) { vi += s.viirs[i]; fv += s.frpV[i]; if (done) { viFull += s.viirs[i]; viMonths++; } }
   }
-  const years = (b - a + 1) / 12;
   $("kModis").textContent = compact(mo);
-  $("kModisS").textContent = `${fmt(mo)} detections · ${compact(mo / years)} per year`;
-  $("kViirs").textContent = viMonths ? compact(vi) : "no data";
-  $("kViirsS").textContent = viMonths
-    ? `${fmt(vi)} detections · ${compact(vi / (viMonths / 12))} per year (from Jan 2012)` : "VIIRS starts in January 2012";
+  $("kModisS").textContent = `${fmt(mo)} detections` + (moMonths ? ` · ${compact(moFull / (moMonths / 12))} per year` : "");
+  $("kViirs").textContent = vi || viMonths ? compact(vi) : "no data";
+  $("kViirsS").textContent = vi || viMonths
+    ? `${fmt(vi)} detections` + (viMonths ? ` · ${compact(viFull / (viMonths / 12))} per year` : "") +
+      (c.months[a] < "2012-02" ? " (VIIRS starts 20 Jan 2012)" : "")
+    : "No VIIRS yet: its data starts on 20 Jan 2012";
 
   // Busiest day in the range (daily numbers are for the whole country/world)
   const d = c.daily, i0 = Math.max(0, dayIndex(state.from + "-01"));
@@ -622,7 +689,8 @@ function renderRealStats() {
   for (let i = i0; i <= i1; i++) if ((d.harmonized[i] || 0) > (d.harmonized[best] || 0)) best = i;
   const day = dayAt(best);
   $("kBusyDay").textContent = new Date(toUTC(day)).toLocaleDateString("en-US", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
-  $("kBusyDayS").textContent = `${fmt(d.harmonized[best])} harmonized hotspots` + (state.area ? " (whole country)" : "");
+  $("kBusyDayS").textContent = `${fmt(d.harmonized[best])} harmonized hotspots` +
+    (state.area ? (isWorld() ? " (whole world)" : " (whole country)") : "");
   $("kBusyDayCard").dataset.day = day;
 
   // Fire strength: average fire radiative power (FRP) per detection
@@ -636,54 +704,87 @@ function renderCards() {
   const c = state.c, s = state.series, [a, b] = rangeIdx();
   const idx = [];
   for (let i = a; i <= b; i++) idx.push(i);
+  const many = idx.length >= 24;                // long enough to say "usually"
 
   // 1. Total harmonized
   const total = idx.reduce((t, i) => t + (s.h[i] || 0), 0);
   $("kTotal").textContent = compact(total);
-  $("kTotalS").textContent = `${fmt(total)} in ${idx.length} months`;
+  $("kTotalS").textContent = `${fmt(total)} in ${idx.length} month${idx.length === 1 ? "" : "s"}`;
 
-  // 2. Busiest calendar month (average over the selected years)
+  // 2. Busiest calendar month (average; the month in progress is left out)
   const sums = new Array(12).fill(0), counts = new Array(12).fill(0);
-  idx.forEach((i) => { if (s.h[i] === null) return; const k = +c.months[i].slice(5, 7) - 1; sums[k] += s.h[i]; counts[k]++; });
+  idx.forEach((i) => {
+    if (s.h[i] === null || c.months[i] === c.inProgress) return;
+    const k = +c.months[i].slice(5, 7) - 1;
+    sums[k] += s.h[i]; counts[k]++;
+  });
   const avgs = sums.map((x, k) => (counts[k] ? x / counts[k] : -1));
   const busy = avgs.indexOf(Math.max(...avgs));
-  $("kBusy").textContent = MONTHS_LONG[busy];
-  $("kBusyS").textContent = `${fmt(avgs[busy])} hotspots on average`;
+  $("kBusy").textContent = avgs[busy] >= 0 ? MONTHS_LONG[busy] : "–";
+  $("kBusyS").textContent = avgs[busy] < 0 ? "No complete month in your range"
+    : counts[busy] > 1 ? `${fmt(avgs[busy])} hotspots on average (${counts[busy]} years)` : `${fmt(avgs[busy])} hotspots`;
 
-  // 3. Top 3 years (full years inside the range if possible)
+  // 3. Top 3 years: FULL years only (all 12 months in range, none missing or
+  // in progress). Terra-only years (before Jul 2002) get a "*".
   const byYear = {};
-  idx.forEach((i) => { const y = c.months[i].slice(0, 4); (byYear[y] = byYear[y] || { t: 0, n: 0 }); byYear[y].t += s.h[i] || 0; byYear[y].n++; });
-  let years = Object.entries(byYear).filter(([, v]) => v.n === 12);
-  if (years.length < 3) years = Object.entries(byYear);
-  years.sort((x, y) => y[1].t - x[1].t);
-  const top = years.slice(0, 3);
-  $("kTop").textContent = top.map(([y]) => y).join(" · ");
-  $("kTopS").textContent = top.map(([, v]) => compact(v.t)).join(" · ") + " hotspots";
-
-  // 4. Latest complete month vs its normal (+ rank among the same month)
-  const li = c.months.length - 1, lm = c.months[li], k = +lm.slice(5, 7) - 1;
-  const an = anomaly(li), going = lm === c.inProgress;
-  if (going) {
-    // Month in progress: "so far" vs the same days of 2001-2025
-    const sf = soFar(k + 1), mine = state.area ? null : s.h[li];
-    const rank = mine === null ? null : 1 + sf.vals.filter((x) => x > mine).length;
-    $("kLatest").textContent = pct(an);
-    $("kLatestS").textContent = `${MONTHS_LONG[k]} ${lm.slice(0, 4)} so far (1–${sf.D}), vs the same days of 2001–2025` +
-      (rank ? ` · ${ordinal(rank)} highest of ${sf.vals.length + 1}` : "");
+  idx.forEach((i) => {
+    const m = c.months[i], y = m.slice(0, 4);
+    const v = (byYear[y] ||= { t: 0, n: 0, terra: false });
+    if (s.h[i] !== null && m !== c.inProgress) { v.t += s.h[i]; v.n++; }
+    if (m < AQUA_START) v.terra = true;
+  });
+  const fullYears = Object.entries(byYear).filter(([, v]) => v.n === 12).sort((x, y) => y[1].t - x[1].t);
+  const top = fullYears.slice(0, 3);
+  const star = ([y, v]) => y + (v.terra ? "*" : "");
+  const anyTerra = top.some(([, v]) => v.terra);
+  if (fullYears.length >= 2) {
+    $("kTop").textContent = top.map(star).join(" · ");
+    $("kTop").title = anyTerra ? "* Terra only: least certain years" : "";
+    $("kTopS").textContent = top.map(([, v]) => compact(v.t)).join(" · ") + " hotspots" +
+      (anyTerra ? " · * Terra only: least certain years" : "");
   } else {
-    const same = c.months.map((m, i) => [m, i]).filter(([m]) => +m.slice(5, 7) === k + 1 && m >= "2001-01");
+    $("kTop").textContent = "–";
+    $("kTop").title = "";
+    $("kTopS").textContent = "Pick at least 2 full years to compare years";
+  }
+
+  // 4. LAST MONTH IN YOUR RANGE vs its normal (+ rank among the same month).
+  // "So far / same days" only when that month is still in progress.
+  const li = b, lm = c.months[li], k = +lm.slice(5, 7) - 1;
+  const an = anomaly(li), going = lm === c.inProgress;
+  let lmName = monthLong(lm), verb = "was";
+  if (going) {
+    const sf = soFar(k + 1), mine = state.area ? null : sf.value;
+    const rank = mine === null || !sf.D ? null : 1 + sf.vals.filter((x) => x > mine).length;
+    lmName = sf.D ? `${monthLong(lm)} so far (1–${sf.D})` : `${monthLong(lm)} so far`;
+    verb = "is";
+    $("kLatest").textContent = pct(an);
+    $("kLatestS").textContent = sf.D
+      ? `${lmName}, vs the same days of ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}` + (rank ? ` · ${ordinal(rank)} highest of ${sf.vals.length + 1}` : "")
+      : `${monthLong(lm)} has just started: no complete day yet`;
+  } else if (s.h[li] === null) {
+    $("kLatest").textContent = "n/a";
+    $("kLatestS").textContent = `${monthLong(lm)}: no data`;
+  } else {
+    const same = c.months.map((m, i) => [m, i]).filter(([m]) => +m.slice(5, 7) === k + 1 && m >= "2001-01" && m !== c.inProgress);
     const rank = 1 + same.filter(([, i]) => s.h[i] > s.h[li]).length;
     $("kLatest").textContent = pct(an);
     $("kLatestS").textContent = `${monthLong(lm)}: ${ordinal(rank)} highest ${MONTHS_LONG[k]} since 2001`;
   }
 
   // Sentence built from the numbers
-  const firstYear = c.months[a].slice(0, 4);
-  let text = `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> is usually the busiest month. `;
-  if (top.length) text += `<b>${top[0][0]}</b> had the most fires of all the years from ${firstYear} to ${c.months[b].slice(0, 4)}. `;
-  const lmName = going ? `${monthLong(lm)} so far` : monthLong(lm), verb = going ? "is" : "was";
+  const y0 = c.months[a].slice(0, 4), y1 = c.months[b].slice(0, 4);
+  let text = avgs[busy] < 0 ? "" : many ? `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> is usually the busiest month. `
+    : `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> was the busiest month in your range. `;
+  if (y0 === y1) {
+    text += `In ${y0}${c.months[a] !== y0 + "-01" || c.months[b] !== y0 + "-12" ? " (your months)" : ""} there were <b>${fmt(total)}</b> harmonized hotspots. `;
+  } else if (fullYears.length >= 2) {
+    const yrs = fullYears.map(([y]) => y).sort();
+    text += `<b>${star(top[0])}</b> had the most fires of the full years from ${yrs[0]} to ${yrs[yrs.length - 1]}` +
+      (top[0][1].terra ? " (* Terra only: least certain)" : "") + ". ";
+  }
   text += an === null
-    ? `${lmName} has no normal to compare with (almost no fires in past ${MONTHS_LONG[k]}s).`
+    ? `${lmName} has no normal to compare with.`
     : Math.abs(Math.round(an)) < 1
       ? `${lmName} ${verb} <b>about normal</b>.`
       : `${lmName} ${verb} <b>${Math.abs(Math.round(an))}% ${an >= 0 ? "above" : "below"} normal</b>${going ? " for the same days" : ""}.`;
@@ -834,7 +935,7 @@ function squarePopup(key, latlng) {
   const [mo, vi, h] = squareSum(key, a, b);
   const lat = (x) => `${Math.abs(x).toFixed(2)}°${x >= 0 ? "N" : "S"}`;
   const lon = (x) => `${Math.abs(x).toFixed(2)}°${x >= 0 ? "E" : "W"}`;
-  const viirsNote = m[b] < "2012-01" ? "no data (before 2012)" : fmt(vi);
+  const viirsNote = m[b] < "2012-01" ? "no data (VIIRS starts 20 Jan 2012)" : fmt(vi);
   L.popup().setLatLng(latlng).setContent(
     `<div class="pop"><b>Square ${lat(i * cs)}–${lat((i + 1) * cs)}, ${lon(j * cs)}–${lon((j + 1) * cs)}</b>
      <div class="small">${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}</div>
@@ -868,7 +969,7 @@ function useArea(layer, label) {
       const [i, j] = key.split("_").map(Number);
       return turf.booleanPointInPolygon(turf.point([(j + 0.5) * cs, (i + 0.5) * cs]), feat);
     }));
-    if (!state.selCells.size) toast("No fire squares inside this area. Try a bigger area inside " + state.c.name);
+    if (!state.selCells.size) toast("No fire squares inside this area. Try a bigger area inside " + countryName());
     render();
   };
   layer.on("pm:edit", update);
@@ -1047,6 +1148,7 @@ function renderCalendar() {
       }
       if (out) cls += " out";
       if (m === c.inProgress) cls += " inprog";       // dashed: month not finished
+      if (noaa20In(m)) cls += " n20";                 // used NOAA-20 on some days
       if (c.partial_months[m]) cls += " partial";
       else if (c.terra_only_months.includes(m)) cls += " terra";
       if (state.period.kind === "month" && state.period.mi === i) cls += " sel";
@@ -1066,6 +1168,7 @@ function renderCalendar() {
   const marks = `<span><span class="mark"></span>satellite gap (part of the month missing)</span>` +
     `<span><span class="mark sq"></span>Terra only (before Jul 2002): converted with the Terra-only rate</span>` +
     (c.inProgress ? `<span><span class="s inprog-key"></span>month in progress (so far)</span>` : "") +
+    (c.noaa20Days && c.noaa20Days.size ? `<span><span class="mark n20-key"></span>other VIIRS satellite (NOAA-20) on some days, adjusted</span>` : "") +
     `<span><span class="s" style="background:repeating-linear-gradient(45deg,var(--nodata-a) 0 3px,var(--nodata-b) 3px 6px)"></span>no data</span>`;
   $("scale").innerHTML = anomalyMode
     ? `<span class="ramp">${DIV.map((c) => `<i style="background:${c}"></i>`).join("")}</span><span>−75% … normal … +100%</span>${marks}`
@@ -1083,7 +1186,13 @@ function calTip(el) {
     `<br>Normal (median): ${nm === null ? "n/a" : fmt(nm)} · ${pct(anomaly(i))}`;
   if (c.partial_months[m]) html += `<br><i>Partial month: ${c.partial_months[m]}</i>`;
   if (c.terra_only_months.includes(m)) html += `<br><i>Terra only: converted with the Terra-only rate</i>`;
-  if (m === c.inProgress) html += `<br><i>In progress: so far, 1–${+c.recentLastDay.slice(8, 10)} ${MONTHS[+m.slice(5, 7) - 1]}; compared with the same days of past years</i>`;
+  if (m === c.inProgress) {
+    const D = soFar(+m.slice(5, 7)).D;
+    html += `<br><i>In progress: ${D ? `days 1–${D} are complete` : "no complete day yet"}` +
+      `${c.recentLastDay > (c.lastComplete || "") ? `, ${+c.recentLastDay.slice(8, 10)} ${MONTHS[+m.slice(5, 7) - 1]} is still loading` : ""}; ` +
+      `compared with the same days of past years</i>`;
+  }
+  if (noaa20In(m)) html += `<br><i>Other VIIRS satellite (NOAA-20) on ${noaa20In(m)} day(s), adjusted to the S-NPP scale</i>`;
   else if (m > "2025-12") html += `<br><i>Current-year data (updated by the robot; recent days are near-real-time)</i>`;
   return html;
 }
@@ -1108,9 +1217,9 @@ function calTip(el) {
     // The same month also drives "this month vs normal" and the satellite picture date.
     state.normalMonth = +m.slice(5, 7);
     state.normalYear = +m.slice(0, 4);
-    state.gibs.date = m + "-15";
+    state.gibs.date = picDate(m + "-15");
     if (state.fire.on) {                 // fire dots follow: the whole month
-      Object.assign(state.fire, { date: m + "-15", span: "month" });
+      Object.assign(state.fire, { date: picDate(m + "-15"), span: "month" });
       setSeg($("fireSpan"), "month");
     }
     renderMap();
@@ -1136,10 +1245,13 @@ function stepDay(delta) {
 function renderDay() {
   const c = state.c, d = state.day, i = dayIndex(d), daily = c.daily;
   $("dayInput").value = d;
-  $("dTitle").textContent = longDate(d);
-  const m = d.slice(0, 7);
-  const notes = ["Whole-country totals"];
-  if (state.area) notes.push("daily numbers are for the whole country, not only your area");
+  // The newest day may still be loading (near-real-time data).
+  const partial = c.lastComplete && d > c.lastComplete && c.recentLastDay && d <= c.recentLastDay;
+  $("dTitle").textContent = longDate(d) + (partial ? " (partial day, still loading)" : "");
+  const m = d.slice(0, 7), place = isWorld() ? "world" : "country";
+  const notes = [`Whole-${place} totals`];
+  if (state.area) notes.push(`daily numbers are for the whole ${place}, not only your area`);
+  if (c.noaa20Days && c.noaa20Days.has(d)) notes.push("other VIIRS satellite (NOAA-20), adjusted");
   if (c.partial_months[m]) notes.push(c.partial_months[m]);
   if (c.terra_only_months.includes(m)) notes.push("Terra only: harmonized with the Terra-only rate");
   $("dSub").textContent = notes.join(" · ");
@@ -1160,7 +1272,8 @@ function renderDay() {
   dayChart.data.datasets[2].data = h;
   dayChart.$sel = i - a;
   // From Feb 2012 harmonized = VIIRS, so the two lines lie on top of each other.
-  $("dayHint").textContent = dayAt(a) >= "2012-02-01" ? "Whole country · after Feb 2012 harmonized = VIIRS (lines overlap)" : "Whole country";
+  const whole = isWorld() ? "Whole world" : "Whole country";
+  $("dayHint").textContent = dayAt(a) >= "2012-02-01" ? `${whole} · from Feb 2012 harmonized = VIIRS (lines overlap)` : whole;
   dayChart.update(reduceMotion ? "none" : undefined);
 }
 
@@ -1269,6 +1382,16 @@ function chartChrome(ch) {
   sc.x.grid = { color: css("--grid") }; sc.y.grid = { color: css("--grid") };
 }
 
+// One verdict word from the hidden-years test (typical error and total bias, in %)
+function verdict(e, bias) {
+  if (e === null || e === undefined || bias === null || bias === undefined) return "not enough fires to test";
+  const b = Math.abs(bias);
+  if (e < 5 && b < 5) return "very good";
+  if (e < 10 && b < 10) return "good";
+  if (e < 20 && b < 20) return "OK";
+  return "weak, use with care";
+}
+
 function renderProof() {
   if (!proofChart || !state.c) return;
   const c = state.c, s = state.series, rate = (m) => c.rates[String(+m.slice(5, 7))].rate;
@@ -1287,11 +1410,12 @@ function renderProof() {
   const sumH = ds[2].data.reduce((t, x) => t + x, 0);
   const v = c.validation;
   let html = `Over 2012–2025, harmonized MODIS adds up to <b>${sumV ? Math.round((sumH / sumV) * 100) : "–"}%</b> of the real VIIRS count ` +
-    `(100% = the lines match). These rates were learned on all of 2012–2025, so the lines should match. ` +
+    `(100% = the lines match). It is not exactly 100% because each month's rate is the middle value (median) of its yearly ratios, ` +
+    `and middle values do not add up exactly to the total. ` +
     `<b>The fair test hides the answer:</b> rates learned only on 2015–2025 predicted the hidden 2012–2014 VIIRS months ` +
     `from MODIS alone, off by <b>${v.median_abs_error_pct ?? "–"}%</b> in a typical month, r = <b>${v.pearson_r ?? "–"}</b>, ` +
-    `total bias <b>${pct(v.bias_pct)}</b>.`;
-  if (state.area) html += ` <i>(Test numbers are for the whole of ${countryName()}.)</i>`;
+    `total bias <b>${pct(v.bias_pct)}</b>. Verdict: <b>${verdict(v.median_abs_error_pct, v.bias_pct)}</b>.`;
+  if (state.area) html += ` <i>(Test numbers are for ${isWorld() ? "the whole world" : `all of ${countryName()}`}.)</i>`;
   if (c.rate_source === "global") html += ` <i>Few fires here, so the world median rate is used: this test says little.</i>`;
   $("proofNote").innerHTML = html;
 }
@@ -1330,9 +1454,9 @@ function renderNormal() {
   const chosen = `${state.normalYear}-${String(k).padStart(2, "0")}`;
   if (chosen === c.inProgress) {
     // Unfinished month: compare with the same days of past years, not full months.
-    const sf = soFar(k), an = sf.normal > 0 ? ((val - sf.normal) / sf.normal) * 100 : null;
+    const sf = soFar(k), an = sf.D > 0 && sf.normal > 0 ? ((sf.value - sf.normal) / sf.normal) * 100 : null;
     $("normalNote").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> (blue bar) is <b>still in progress</b>: ` +
-      `${fmt(val)} harmonized hotspots in days 1–${sf.D}, <b>${an === null ? "no normal" : pct(an)}</b> vs the same days of ` +
+      `${fmt(sf.value)} harmonized hotspots in its complete days 1–${sf.D}, <b>${an === null ? "no normal" : pct(an)}</b> vs the same days of ` +
       `${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]} (normal = ${fmt(sf.normal)}). The other bars are full months. Click a bar to pick another year.`;
     return;
   }
@@ -1382,7 +1506,7 @@ function renderHow() {
 
   // 3) Validation ("hide the answer")
   const v = c.validation, e = v.median_abs_error_pct;
-  const word = e === null ? "not enough fires to test" : e < 15 ? "very good" : e < 30 ? "good" : "rough (few fires)";
+  const word = verdict(e, v.bias_pct);           // same verdict as the proof chart
   $("validBox").innerHTML =
     `<div class="valid-num">` +
     `<div><b>${e ?? "–"}%</b><span>typical month off by</span></div>` +
@@ -1399,7 +1523,7 @@ function renderHow() {
   if (c.rate_source === "global") notes.push("it has very few fires, so it uses the world median exchange rate");
   if (avg < 1.5) notes.push(`its exchange rate is unusually low (${avg.toFixed(1)}): MODIS sees hot places here that VIIRS does not count as fires`);
   if (avg > 10) notes.push(`its exchange rate is unusually high (${avg.toFixed(1)}): non-vegetation heat (lava, gas flares) may be left in the data`);
-  if (e !== null && e > 40) notes.push(`the hidden-years test is rough (${e}%), so harmonized years before 2012 are less certain`);
+  if (e !== null && e > 40) notes.push(`the hidden-years test is rough (${e}%), so harmonized years before Feb 2012 are less certain`);
   $("countryLimits").hidden = !notes.length;
   $("countryLimits").innerHTML = notes.length ? `<b>Note for ${c.name}:</b> ${notes.join("; ")}.` : "";
 }
@@ -1433,7 +1557,7 @@ function saveCSV(text, name) {
 const fileTag = () => `hotsync_${state.c.slug}${state.area ? "_area" : ""}_${state.from}_${state.to}`;
 
 function downloadMonthly() {
-  const rows = monthlyRows().map((r) => ({ country: state.c.name, area: state.area ? state.area.label : "whole country", ...r }));
+  const rows = monthlyRows().map((r) => ({ country: state.c.name, area: state.area ? state.area.label : isWorld() ? "whole world" : "whole country", ...r }));
   saveCSV(Papa.unparse(rows), fileTag() + "_monthly.csv");
   toast(`Downloaded ${rows.length} months`);
 }
