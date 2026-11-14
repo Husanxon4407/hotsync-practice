@@ -377,6 +377,15 @@ def write_if_changed(path, obj):
     return True
 
 
+def sat_of(src):
+    """'NOAA20' or 'SNPP' for one day's source entry (older entries have no
+    viirs_sat field: then read it from the VIIRS source name)."""
+    s = src or {}
+    if s.get("viirs_sat"):
+        return s["viirs_sat"]
+    return "NOAA20" if "NOAA20" in (s.get("viirs") or "") else "SNPP"
+
+
 def load_factors():
     """NOAA-20 -> S-NPP factors (learned with --learn-factor). 1.0 if not learned yet."""
     if FACTOR_FILE.exists():
@@ -392,6 +401,7 @@ def last_complete_day(days, sources):
     fetched at least 12 hours after the day ended (late satellite passes).
     """
     last = None
+    newest = days[-1] if days else None
     for d in days:
         s = sources.get(d) or {}
         srcs = [x for x in (s.get("modis"), s.get("viirs")) if x]
@@ -402,7 +412,9 @@ def last_complete_day(days, sources):
             got = datetime.fromisoformat(s["fetched_at"].replace("Z", "+00:00"))
             ok = got >= end + timedelta(hours=COMPLETE_AFTER_H)
         else:
-            ok = False
+            # older entries have no fetch time: complete if at least 2 days
+            # older than the newest day (late passes arrive within hours)
+            ok = (date.fromisoformat(newest) - date.fromisoformat(d)).days >= 2
         if not ok:
             break
         last = d
@@ -415,7 +427,7 @@ def learn_factor(firms):
     sizes = json.loads(CELL_SIZES.read_text())
     avail = firms.availability()
     sources = json.loads(SOURCES_FILE.read_text())
-    snpp = sorted(d for d, s in sources.items() if d > HISTORY_END and (s or {}).get("viirs_sat") == "SNPP"
+    snpp = sorted(d for d, s in sources.items() if d > HISTORY_END and sat_of(s) == "SNPP"
                   and (DAYS_DIR / f"{d}.csv.gz").exists() and noaa20_source(avail, d))
     if not snpp:
         sys.exit("No S-NPP days to learn from.")
@@ -465,7 +477,7 @@ def rebuild():
 
     # NOAA-20 days -> S-NPP scale (per country factor, world factor if few fires)
     fac = load_factors()
-    sat = {d: (sources.get(d) or {}).get("viirs_sat", "SNPP") for d in have_days}
+    sat = {d: sat_of(sources.get(d)) for d in have_days}
     noaa = allrows["day"].map(lambda d: sat.get(d) == "NOAA20")
     f = np.where(noaa, allrows["slug"].map(lambda x: fac["countries"].get(x, fac["world"])), 1.0)
     allrows["v"] = allrows["v"] * f

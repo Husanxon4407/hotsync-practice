@@ -110,3 +110,4 @@ If it stopped: just run the same command again (it only fetches missing days).
 4. Push → the push trigger runs the robot once on GitHub → check it is green and commits only when data changed.
 5. Browser tests (my Chrome automation can't open localhost any more; the team tests in their own Chrome).
 Remember: the schedule + "Run workflow" button work only after the merge to `main` (Stage 8).
+**GitHub Pages now publishes from `full-history`** (team asked to share the site, 2026-11-14 ~23:25). In Stage 8: merge into `main`, then switch Pages back to `main`.
