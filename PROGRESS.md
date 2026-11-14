@@ -30,3 +30,12 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
   Nov 2000–Jun 2002 (Terra only) use a separate Terra-only rate.
 - Uzbekistan: rates 3.1–9.1 (high May–Sep), hold-out error 18.8%, r = 0.934, bias +16.3%, LOYO 20%. July 2025: MODIS 232 / VIIRS 833 (prototype 225 / 807).
 - Outputs: `web/data/country/uzbekistan.json` 0.86 MB, `web/data/points/uzbekistan/` 8.8 MB, `D:\hotsync_data\checks\uzbekistan.png`.
+
+## 2026-11-14 ~17:40 · Stage 3: process all countries
+- `process_all.py` rewritten to work **year by year** (pass A: clean + save each year as parquet in data_work; pass B: drop static places, add up counts), so big countries fit in 7.8 GB RAM. Uzbekistan results identical to Stage 2.
+- 237 FIRMS countries → **234 country JSON files** (3 had no data). Squares: 0.1° for 183 countries, 0.25° for 51 big ones (plan rule; never coarser).
+- **Global median rate 4.36** (from 171 countries; Terra-only 10.63); **63 small countries use it**.
+- Written: `web/data/countries.json`, `web/data/rates_summary.csv`, `data/static_cells.csv` (4,519 squares, for the Stage 6 robot), 5 check images in `D:\hotsync_data\checks`.
+- `web/data` = 488 MB (plan said 300 MB; **team decided to keep it**: GitHub Pages limit is 1 GB, biggest file 26 MB).
+- Fixed: every country timeline now runs to 2025-12 (65 small countries used to stop at their last fire).
+- **Stage 6 warning:** don't rewrite the big country files every 6 h (git history would grow ~1 GB/day); keep 2026 in small separate files.

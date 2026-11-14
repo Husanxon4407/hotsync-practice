@@ -4,19 +4,29 @@ HotSync: process_all.py  (Stage 2: one country, Stage 3: all countries)
 For each country, this script turns the raw FIRMS zips into one small JSON
 file for the website:
 
-    1. LOAD      that country's MODIS + VIIRS CSVs, year by year, straight
+    1. LOAD      that country's MODIS + VIIRS CSVs, YEAR BY YEAR, straight
                  from the zips (no unzipping to disk)
     2. CLEAN     type, confidence, "always hot" places (factories)
-    3. GRID      count fires per 0.1 degree square per month (+ fire power)
+    3. GRID      count fires per square per month (+ fire power)
     4. RATES     the "exchange rate" VIIRS / MODIS for each calendar month
     5. HARMONIZE H = rate x MODIS before Feb 2012, H = VIIRS after
     6. VALIDATE  hide 2012-2014, predict it from MODIS, compare with real VIIRS
     7. EXPORT    web/data/country/<slug>.json (+ dots for showcase countries)
                  and a check image in D:\\hotsync_data\\checks
 
+Why year by year? Big countries are BIG (Brazil: ~1.5 million VIIRS fires
+per year). All years at once would not fit in the laptop's memory. So:
+    Pass A  read one year -> clean type + confidence -> save a small parquet
+            file in data_work, and remember which ~1 km squares were hot in
+            8+ months that year (factory candidates).
+    Pass B  read the saved years again, one by one -> drop factories ->
+            add the year's counts to the running totals (grid, daily).
+Only the totals stay in memory, never all the fires.
+
 Run:
     .venv\\Scripts\\python process_all.py --country Uzbekistan
-    .venv\\Scripts\\python process_all.py --all          (Stage 3)
+    .venv\\Scripts\\python process_all.py --all
+    (add --fresh to re-read the zips instead of using saved work)
 """
 
 import argparse
@@ -24,8 +34,9 @@ import json
 import math
 import re
 import shutil
+import sys
+import time
 import zipfile
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -62,14 +73,15 @@ STATIC_RING = True
 # separate "Terra-only" rate: VIIRS / Terra MODIS, learned on 2012-2025.
 AQUA_START = "2002-07"
 
-CELL = 0.1                         # map squares (~11 km)
-BIG_CELL = 0.25                    # used if the JSON would be too big
+# Map squares. 0.1 degree (~11 km) if the file stays small; for very big
+# countries 0.25 degree, as the plan says (never coarser).
+CELL_SIZES = (0.1, 0.25)
 MAX_JSON_MB = 3
 
 MIN_MODIS = 10                     # a month needs >= 10 MODIS fires for a ratio
 MIN_YEARS = 3                      # a calendar month needs >= 3 such years
 MIN_RATIOS = 6                     # a country needs >= 6 ratios, else global
-GLOBAL_RATE = 3.5                  # placeholder, recomputed in Stage 3
+PLACEHOLDER_GLOBAL = 3.5           # used until --all has computed the real one
 
 VALID_TRAIN = range(2015, 2026)    # learn the rates on these years...
 VALID_TEST = ("2012-02", "2014-12")  # ...and predict these months
@@ -84,12 +96,22 @@ PARTIAL_MONTHS = {
 }
 
 SHOWCASE = {"Uzbekistan", "Argentina"}   # these keep every fire dot
+CHECK_IMAGES = {"Uzbekistan", "Argentina", "United_Kingdom", "Brazil",
+                "Kazakhstan"}
 COLUMNS = ["latitude", "longitude", "acq_date", "acq_time", "satellite",
            "confidence", "frp", "type"]
 
 OUT_COUNTRY = config.WEB_DATA_DIR / "country"
 OUT_POINTS = config.WEB_DATA_DIR / "points"
 GEOJSON = config.REPO_DIR / "data" / "countries.geojson"
+STATIC_LIST = config.REPO_DIR / "data" / "static_cells.csv"
+GLOBAL_FILE = config.WORK_DIR / "global_rates.json"
+
+# Dates are stored as small numbers to save memory.
+EPOCH = pd.Timestamp("2000-01-01")
+DAY0 = (pd.Timestamp(f"{HISTORY_START}-01") - EPOCH).days   # 2000-11-01
+LAST_POSSIBLE_DAY = (pd.Timestamp("2026-12-31") - EPOCH).days
+HISTORY_END_DAY = (pd.Timestamp("2025-12-31") - EPOCH).days  # last zip day
 
 # 2026 world files from the FIRMS Archive (optional): code -> (sensor, sat)
 WORLD_CODES = {"M-C61": ("MODIS", None), "SV-C2": ("VIIRS", "S-NPP"),
@@ -109,8 +131,23 @@ def short(x, digits=1):
     return int(r) if r.is_integer() else r
 
 
+def ym_str(ym):
+    """Month number (months since Jan 2000) -> 'YYYY-MM'."""
+    return f"{2000 + ym // 12}-{ym % 12 + 1:02d}"
+
+
+def ym_of(text):
+    """'YYYY-MM' -> month number."""
+    return (int(text[:4]) - 2000) * 12 + int(text[5:7]) - 1
+
+
+def cell_code(ci, cj):
+    """Two square numbers -> one number (fast to compare with np.isin)."""
+    return ci.astype(np.int64) * 100_000 + cj.astype(np.int64)
+
+
 # ---------------------------------------------------------------------------
-# 1. LOAD
+# 1. LOAD (one year at a time)
 # ---------------------------------------------------------------------------
 def read_zip_country(prefix, year, name):
     """One country's CSV for one year, read straight from the yearly zip."""
@@ -123,7 +160,8 @@ def read_zip_country(prefix, year, name):
             # acq_time and confidence as text: "0520" keeps its 0, and
             # VIIRS confidence is a letter.
             return pd.read_csv(f, usecols=lambda c: c in COLUMNS,
-                               dtype={"acq_time": str, "confidence": str})
+                               dtype={"acq_time": str, "confidence": str,
+                                      "satellite": str})
 
 
 def load_world_2026(name):
@@ -134,9 +172,12 @@ def load_world_2026(name):
     VIIRS rule: S-NPP up to SNPP_LAST_DAY, NOAA-20 after it.
     Archive (standard) data wins over NRT for the days it covers.
     """
+    files = sorted(config.DATA_2026_DIR.glob("fire_*.csv"))
+    if not files:
+        return None
     from countries import assign_country
     frames = []
-    for f in sorted(config.DATA_2026_DIR.glob("fire_*.csv")):
+    for f in files:
         code = next((c for c in WORLD_CODES if f"_{c}_" in f.name), None)
         if code is None:
             continue
@@ -145,7 +186,8 @@ def load_world_2026(name):
         if not cache.exists():
             cache.parent.mkdir(parents=True, exist_ok=True)
             df = pd.read_csv(f, usecols=lambda c: c in COLUMNS,
-                             dtype={"acq_time": str, "confidence": str})
+                             dtype={"acq_time": str, "confidence": str,
+                                    "satellite": str})
             assign_country(df).to_parquet(cache)
         df = pd.read_parquet(cache)
         df = df[df["country"] == name].drop(columns="country")
@@ -160,143 +202,268 @@ def load_world_2026(name):
     df = pd.concat(frames, ignore_index=True)
     # Per sensor: use NRT only for days after the last standard (sp) day.
     keep = []
-    for s, g in df.groupby("sensor"):
+    for _, g in df.groupby("sensor"):
         last_sp = g.loc[g["kind"] == "sp", "acq_date"].max()
         keep.append(g if pd.isna(last_sp) else
                     g[(g["kind"] == "sp") | (g["acq_date"] > last_sp)])
     return pd.concat(keep).drop(columns="kind")
 
 
-def load_country(name):
-    """All years, both sensors, one table with a 'sensor' column."""
+def load_year(name, year):
+    """Both sensors for one year (2026 = optional world files)."""
+    if year == 2026:
+        return load_world_2026(name)
     frames = []
     for sensor, prefix, years in (("MODIS", "modis", MODIS_YEARS),
                                   ("VIIRS", "viirs-snpp", VIIRS_YEARS)):
-        for year in years:
+        if year in years:
             df = read_zip_country(prefix, year, name)
-            if df is not None:
+            if df is not None and len(df):
                 frames.append(df.assign(sensor=sensor))
-    recent = load_world_2026(name)
-    if recent is not None:
-        frames.append(recent)
-    if not frames:
-        return None
-    return pd.concat(frames, ignore_index=True)
+    return pd.concat(frames, ignore_index=True) if frames else None
 
 
 # ---------------------------------------------------------------------------
 # 2. CLEAN
 # ---------------------------------------------------------------------------
-def find_static_cells(df):
-    """Find ~1 km squares that are hot almost all year.
-
-    A real fire burns for days or weeks. A factory or gas flare is hot
-    month after month, year after year. So a square is "static" if it has
-    fires in >= 8 different months of one year, in >= 3 different years,
-    OR in >= 10 different months of any single year (new factories).
-    Both sensors together.
-    """
-    cells = pd.DataFrame({
-        # Integer keys (lat x 100) avoid float rounding surprises.
-        "ci": np.round(df["latitude"] / STATIC_CELL).astype(int),
-        "cj": np.round(df["longitude"] / STATIC_CELL).astype(int),
-        "year": df["acq_date"].str[:4],
-        "month": df["acq_date"].str[5:7],
-    })
-    months_per_year = (cells.drop_duplicates()
-                       .groupby(["ci", "cj", "year"]).size())
-    busy_years = (months_per_year >= STATIC_MONTHS).groupby(
-        ["ci", "cj"]).sum()
-    max_months = months_per_year.groupby(["ci", "cj"]).max()
-    static = busy_years[(busy_years >= STATIC_YEARS)
-                        | (max_months >= STATIC_ANY_YEAR_MONTHS)]
-
-    # How many detections each static square had (to show the biggest).
-    hits = cells.groupby(["ci", "cj"]).size()
-    out = pd.DataFrame({"busy_years": static,
-                        "max_months": max_months.reindex(static.index),
-                        "detections": hits.reindex(static.index)})
-    out = out.reset_index().sort_values("detections", ascending=False)
-    out["lat"] = (out["ci"] * STATIC_CELL).round(2)
-    out["lon"] = (out["cj"] * STATIC_CELL).round(2)
-    return out
+def new_steps():
+    """Empty cleaning table: per step, per sensor, before / removed."""
+    names = ["type == 0 (vegetation fire)",
+             f"confidence (MODIS >= {MODIS_MIN_CONF}, VIIRS n/h)",
+             "static places"]
+    return [{"step": n, "MODIS": {"before": 0, "removed": 0},
+             "VIIRS": {"before": 0, "removed": 0}} for n in names]
 
 
-def clean(df):
-    """Apply the cleaning rules in order. Returns (clean df, steps, static)."""
-    steps = []
+def count_step(step, is_viirs, keep):
+    """Add one year's numbers for one cleaning rule to the table."""
+    for s, mine in (("MODIS", ~is_viirs), ("VIIRS", is_viirs)):
+        step[s]["before"] += int(mine.sum())
+        step[s]["removed"] += int((mine & ~keep).sum())
 
-    def record(step, keep):
-        nonlocal df
-        row = {"step": step}
-        for s in ("MODIS", "VIIRS"):
-            mine = df["sensor"] == s
-            row[s] = {"before": int(mine.sum()),
-                      "removed": int((mine & ~keep).sum())}
-        steps.append(row)
-        df = df[keep]
+
+def clean_year(df, steps):
+    """Rules 1 and 2 (type, confidence) for one year -> compact table."""
+    is_viirs = (df["sensor"] == "VIIRS").to_numpy()
 
     # Rule 1: only vegetation fires (type 0). Rows with no type (NRT data)
     # are kept here; the static-cell rule catches their factories.
-    has_type = df["type"].notna() if "type" in df else False
-    record("type == 0 (vegetation fire)",
-           ~has_type | (df["type"] == 0) if "type" in df
-           else pd.Series(True, index=df.index))
+    if "type" in df:
+        keep = (df["type"].isna() | (df["type"] == 0)).to_numpy()
+    else:
+        keep = np.ones(len(df), bool)
+    count_step(steps[0], is_viirs, keep)
+    df, is_viirs = df[keep], is_viirs[keep]
 
     # Rule 2: confidence. MODIS: number >= 30. VIIRS: n or h (any case;
     # some NRT files write "nominal" / "high", so we check the 1st letter).
-    is_modis = df["sensor"] == "MODIS"
-    conf_num = pd.to_numeric(df["confidence"], errors="coerce")
+    conf_num = pd.to_numeric(df["confidence"], errors="coerce").to_numpy()
     conf_letter = df["confidence"].astype(str).str.lower().str[0]
-    record(f"confidence (MODIS >= {MODIS_MIN_CONF}, VIIRS n/h)",
-           (is_modis & (conf_num >= MODIS_MIN_CONF))
-           | (~is_modis & conf_letter.isin(VIIRS_KEEP_CONF)))
+    keep = np.where(is_viirs, conf_letter.isin(VIIRS_KEEP_CONF).to_numpy(),
+                    conf_num >= MODIS_MIN_CONF)
+    count_step(steps[1], is_viirs, keep)
+    df = df[keep]
 
-    # Rule 3: always-hot places.
-    static = find_static_cells(df)
-    key = (np.round(df["latitude"] / STATIC_CELL).astype(int).astype(str)
-           + "_" + np.round(df["longitude"] / STATIC_CELL).astype(int)
-           .astype(str))
+    # Compact table: numbers instead of text where we can (less memory).
+    date = pd.to_datetime(df["acq_date"], format="%Y-%m-%d")
+    sat = df["satellite"].astype(str)
+    return pd.DataFrame({
+        "lat": df["latitude"].to_numpy(float),
+        "lon": df["longitude"].to_numpy(float),
+        "day": (date - EPOCH).dt.days.to_numpy(np.int32),
+        "ym": ((date.dt.year - 2000) * 12 + date.dt.month - 1)
+        .to_numpy(np.int16),
+        "time": df["acq_time"].astype(str).str.zfill(4).to_numpy(),
+        "viirs": (df["sensor"] == "VIIRS").to_numpy(),
+        "terra": sat.str.upper().str.startswith("T").to_numpy(),
+        "sat": sat.to_numpy(),
+        "conf": df["confidence"].astype(str).to_numpy(),
+        "frp": df["frp"].to_numpy(float),
+    })
+
+
+def static_candidates(d):
+    """~1 km squares hot in >= 8 different months of THIS year."""
+    ci = np.round(d["lat"].to_numpy() / STATIC_CELL).astype(np.int32)
+    cj = np.round(d["lon"].to_numpy() / STATIC_CELL).astype(np.int32)
+    t = pd.DataFrame({"ci": ci, "cj": cj, "ym": d["ym"].to_numpy()})
+    months = t.drop_duplicates().groupby(["ci", "cj"]).size()
+    hits = t.groupby(["ci", "cj"]).size()
+    busy = months[months >= STATIC_MONTHS]
+    return pd.DataFrame({"months": busy,
+                         "hits": hits.reindex(busy.index)}).reset_index()
+
+
+def decide_static(candidates):
+    """Static = busy (>= 8 months) in >= 3 years, or >= 10 months in a year."""
+    if candidates.empty:
+        return pd.DataFrame(columns=["ci", "cj", "busy_years", "max_months",
+                                     "detections", "lat", "lon"])
+    g = candidates.groupby(["ci", "cj"]).agg(
+        busy_years=("months", "size"), max_months=("months", "max"),
+        detections=("hits", "sum")).reset_index()
+    s = g[(g["busy_years"] >= STATIC_YEARS)
+          | (g["max_months"] >= STATIC_ANY_YEAR_MONTHS)].copy()
+    s["lat"] = (s["ci"] * STATIC_CELL).round(2)
+    s["lon"] = (s["cj"] * STATIC_CELL).round(2)
+    return s.sort_values("detections", ascending=False)
+
+
+def static_codes(static):
+    """All square codes to remove: each static square (+ its ring)."""
     ring = (-1, 0, 1) if STATIC_RING else (0,)
-    static_keys = {f"{i + di}_{j + dj}"
-                   for i, j in zip(static["ci"], static["cj"])
-                   for di in ring for dj in ring}
-    record(f"static places ({len(static)} squares of ~1 km"
-           + (" + ring around each)" if STATIC_RING else ")"),
-           ~key.isin(static_keys))
-
-    return df.copy(), steps, static
+    ci, cj = static["ci"].to_numpy(np.int64), static["cj"].to_numpy(np.int64)
+    return np.unique(np.concatenate(
+        [cell_code(ci + di, cj + dj) for di in ring for dj in ring]
+        or [np.array([], np.int64)]))
 
 
 # ---------------------------------------------------------------------------
-# 3. GRID (fires and fire power per square per month)
+# PASS A + B: aggregate one country (heavy part, saved in data_work)
 # ---------------------------------------------------------------------------
-def grid(df, cell):
-    """Count fires and add up FRP per square, per month, per sensor."""
-    g = df.assign(month=df["acq_date"].str[:7],
-                  i=np.floor(df["latitude"] / cell).astype(int),
-                  j=np.floor(df["longitude"] / cell).astype(int))
-    agg = (g.groupby(["month", "i", "j", "sensor"])
-           .agg(n=("frp", "size"), frp=("frp", "sum"))
-           .unstack("sensor", fill_value=0))
-    out = pd.DataFrame(index=agg.index)
-    for s in ("MODIS", "VIIRS"):
-        low = s.lower()
-        out[low] = agg[("n", s)] if ("n", s) in agg else 0
-        out[f"frp_{low}"] = agg[("frp", s)] if ("frp", s) in agg else 0.0
-    return out.reset_index()
+def work_dir(name):
+    return config.WORK_DIR / slug_of(name)
 
 
-def month_list(last_month):
-    """['2000-11', '2000-12', ..., last_month]."""
-    return [str(p) for p in pd.period_range(HISTORY_START, last_month,
-                                            freq="M")]
+def write_points_year(folder, year, d):
+    """Showcase countries: every clean fire dot of one year as CSV."""
+    date = (EPOCH + pd.to_timedelta(d["day"], unit="D")).dt.strftime(
+        "%Y-%m-%d")
+    pts = pd.DataFrame({
+        "lat": d["lat"].round(4), "lon": d["lon"].round(4),
+        "date": date, "time": d["time"],
+        "sensor": np.where(d["viirs"], "VIIRS", "MODIS"),
+        "confidence": d["conf"], "frp": d["frp"].round(2),
+        "satellite": d["sat"],
+    }).sort_values(["date", "time"])
+    pts.to_csv(folder / f"{year}.csv", index=False)
+
+
+def aggregate_country(name):
+    """Read all years and make the country's totals. Saved in data_work."""
+    wd = work_dir(name)
+    years_dir = wd / "years"
+    if wd.exists():
+        shutil.rmtree(wd)
+    years_dir.mkdir(parents=True)
+    steps = new_steps()
+
+    # ---- Pass A: clean type + confidence, save each year, find candidates
+    candidates, years = [], []
+    for year in list(MODIS_YEARS) + [2026]:
+        raw = load_year(name, year)
+        if raw is None or raw.empty:
+            continue
+        d = clean_year(raw, steps)
+        del raw
+        if d.empty:
+            continue
+        d.to_parquet(years_dir / f"{year}.parquet", index=False)
+        candidates.append(static_candidates(d).assign(year=year))
+        years.append(year)
+    if not years:
+        return None
+
+    static = decide_static(pd.concat(candidates, ignore_index=True))
+    codes = static_codes(static)
+
+    # ---- Pass B: drop static places, add up counts year by year
+    n_days = LAST_POSSIBLE_DAY - DAY0 + 1
+    daily = {"MODIS": np.zeros(n_days, np.int64),
+             "VIIRS": np.zeros(n_days, np.int64)}
+    terra = np.zeros(13 * 12 * 3, np.int64)     # per month number
+    grids = {c: [] for c in CELL_SIZES}
+    last_day = DAY0
+    points_dir = None
+    if name in SHOWCASE:
+        points_dir = OUT_POINTS / slug_of(name)
+        if points_dir.exists():
+            shutil.rmtree(points_dir)
+        points_dir.mkdir(parents=True)
+
+    for year in years:
+        d = pd.read_parquet(years_dir / f"{year}.parquet")
+        ci = np.round(d["lat"].to_numpy() / STATIC_CELL).astype(np.int64)
+        cj = np.round(d["lon"].to_numpy() / STATIC_CELL).astype(np.int64)
+        keep = ~np.isin(cell_code(ci, cj), codes)
+        count_step(steps[2], d["viirs"].to_numpy(), keep)
+        d = d[keep]
+        if d.empty:
+            continue
+        last_day = max(last_day, int(d["day"].max()))
+
+        for sensor, mine in (("MODIS", ~d["viirs"]), ("VIIRS", d["viirs"])):
+            daily[sensor] += np.bincount(d.loc[mine, "day"] - DAY0,
+                                         minlength=n_days)[:n_days]
+        t = d[~d["viirs"] & d["terra"]]
+        terra += np.bincount(t["ym"], minlength=len(terra))[:len(terra)]
+
+        for c in CELL_SIZES:
+            g = (d.assign(i=np.floor(d["lat"] / c).astype(np.int32),
+                          j=np.floor(d["lon"] / c).astype(np.int32))
+                 .groupby(["ym", "i", "j", "viirs"])
+                 .agg(n=("frp", "size"), frp=("frp", "sum")))
+            grids[c].append(g)
+
+        if points_dir:
+            write_points_year(points_dir, year, d)
+
+    steps[2]["step"] = (f"static places ({len(static)} squares of ~1 km"
+                        + (" + ring around each)" if STATIC_RING else ")"))
+
+    # Choose the square size: the smallest that keeps the JSON small.
+    # ~26 bytes per (square, month) row in the JSON (measured).
+    cell, grid = None, None
+    for c in CELL_SIZES:
+        g = (pd.concat(grids[c]).unstack("viirs", fill_value=0)
+             .sort_index())
+        g.columns = [f"{k}_{'viirs' if v else 'modis'}" for k, v in g.columns]
+        for col in ("n_modis", "n_viirs", "frp_modis", "frp_viirs"):
+            if col not in g:
+                g[col] = 0
+        cell, grid = c, g.reset_index()
+        if len(grid) * 26 / 1e6 <= MAX_JSON_MB - 0.5:
+            break
+    del grids
+
+    # Save the totals (small) so export never needs the zips again.
+    grid.to_parquet(wd / "grid.parquet", index=False)
+    static.to_parquet(wd / "static_cells.parquet", index=False)
+    n = last_day - DAY0 + 1
+    np.savez(wd / "daily.npz", modis=daily["MODIS"][:n],
+             viirs=daily["VIIRS"][:n], terra=terra)
+    meta = {"name": name, "cell": cell, "last_day": last_day,
+            "steps": steps, "years": years}
+    (wd / "meta.json").write_text(json.dumps(meta))
+    shutil.rmtree(years_dir)          # the big per-year files are not needed
+    return meta
+
+
+def load_aggregates(name):
+    """Read what aggregate_country saved (None if not done yet)."""
+    wd = work_dir(name)
+    if not (wd / "meta.json").exists():
+        return None
+    meta = json.loads((wd / "meta.json").read_text())
+    z = np.load(wd / "daily.npz")
+    # Every country's timeline runs to at least the end of the history
+    # (31 Dec 2025), even if its last fire was earlier: no fire = 0,
+    # not "missing".
+    meta["end_day"] = max(meta["last_day"], HISTORY_END_DAY)
+    n = meta["end_day"] - DAY0 + 1
+
+    def pad(a):
+        return np.concatenate([a, np.zeros(n - len(a), a.dtype)])
+    return {"meta": meta, "grid": pd.read_parquet(wd / "grid.parquet"),
+            "static": pd.read_parquet(wd / "static_cells.parquet"),
+            "daily_modis": pad(z["modis"]), "daily_viirs": pad(z["viirs"]),
+            "terra": z["terra"]}
 
 
 # ---------------------------------------------------------------------------
 # 4. EXCHANGE RATES
 # ---------------------------------------------------------------------------
-def learn_rates(monthly, years=None):
+def learn_rates(monthly, years=None, global_rate=PLACEHOLDER_GLOBAL):
     """VIIRS / MODIS for each calendar month, from the overlap years.
 
     monthly: table with columns month ('YYYY-MM'), modis, viirs.
@@ -317,7 +484,7 @@ def learn_rates(monthly, years=None):
     for cal in range(1, 13):
         r = m.loc[m["cal"] == cal, "ratio"]
         if use_global:
-            rate, src = GLOBAL_RATE, "global"
+            rate, src = global_rate, "global"
         elif len(r) < MIN_YEARS:
             rate, src = pooled, "pooled"
         else:
@@ -357,9 +524,9 @@ def errors(pred, real):
     return mae, r, bias
 
 
-def validate(monthly):
+def validate(monthly, global_rate):
     """Learn on 2015-2025, predict 2012-02..2014-12. Also leave-one-year-out."""
-    rates, src, _ = learn_rates(monthly, VALID_TRAIN)
+    rates, src, _ = learn_rates(monthly, VALID_TRAIN, global_rate)
     test = monthly[(monthly["month"] >= VALID_TEST[0])
                    & (monthly["month"] <= VALID_TEST[1])]
     pred = [rates[str(int(m[5:7]))]["rate"] * x
@@ -371,7 +538,7 @@ def validate(monthly):
     loyo = []
     for year in range(2012, 2026):
         others = [y for y in range(2012, 2026) if y != year]
-        yr_rates, _, _ = learn_rates(monthly, others)
+        yr_rates, _, _ = learn_rates(monthly, others, global_rate)
         t = monthly[(monthly["month"].str[:4] == str(year))
                     & (monthly["month"] >= OVERLAP_START)]
         p = [yr_rates[str(int(m[5:7]))]["rate"] * x
@@ -396,66 +563,79 @@ def validate(monthly):
 
 
 # ---------------------------------------------------------------------------
-# 8. DAILY TOTALS
+# RATES for one country (light, from the saved totals)
 # ---------------------------------------------------------------------------
-def daily_arrays(df, rates, terra_rates, last_day):
-    """Country totals per day, from 2000-11-01: MODIS, VIIRS, harmonized."""
-    days = pd.date_range(f"{HISTORY_START}-01", last_day, freq="D")
-    labels = days.strftime("%Y-%m-%d")
-    counts = (df.groupby(["acq_date", "sensor"]).size()
-              .unstack(fill_value=0).reindex(labels, fill_value=0))
-    modis = counts.get("MODIS", pd.Series(0, index=labels)).astype(int)
-    viirs = counts.get("VIIRS", pd.Series(0, index=labels)).astype(int)
+def monthly_table(agg):
+    """Country totals per month: modis, viirs, FRP, Terra-only MODIS."""
+    meta, grid = agg["meta"], agg["grid"]
+    first = ym_of(HISTORY_START)
+    last = (pd.Timestamp(EPOCH) + pd.Timedelta(days=meta["end_day"]))
+    yms = list(range(first, (last.year - 2000) * 12 + last.month))
+    sums = (grid.groupby("ym")[["n_modis", "n_viirs", "frp_modis",
+                                "frp_viirs"]].sum().reindex(yms, fill_value=0))
+    return pd.DataFrame({
+        "ym": yms, "month": [ym_str(y) for y in yms],
+        "modis": sums["n_modis"].to_numpy(),
+        "viirs": sums["n_viirs"].to_numpy(),
+        "frp_modis": sums["frp_modis"].to_numpy(),
+        "frp_viirs": sums["frp_viirs"].to_numpy(),
+        "terra": agg["terra"][yms],
+    })
 
-    out_v, out_h = [], []
-    for day, m, v in zip(labels, modis, viirs):
-        out_v.append(None if day < VIIRS_START_DAY else int(v))
-        out_h.append(short(harmonize(day[:7], m, v, rates, terra_rates)))
-    return {"modis": modis.tolist(), "viirs": out_v, "harmonized": out_h}
+
+def country_rates(monthly, global_rate, global_terra):
+    rates, source, n = learn_rates(monthly, global_rate=global_rate)
+    terra_rates, terra_source, _ = learn_rates(
+        monthly[["month", "viirs"]].assign(modis=monthly["terra"]),
+        global_rate=global_terra)
+    return rates, source, n, terra_rates, terra_source
 
 
 # ---------------------------------------------------------------------------
-# 7. EXPORT
+# 7. EXPORT (light, from the saved totals)
 # ---------------------------------------------------------------------------
-def country_bbox(name, df):
-    """[west, south, east, north] from the country polygon (or the dots)."""
-    try:
+_BBOXES = None
+
+
+def country_bbox(name):
+    """[west, south, east, north] from the country polygon."""
+    global _BBOXES
+    if _BBOXES is None:
         from shapely.geometry import shape
         with open(GEOJSON, encoding="utf-8") as f:
-            for ft in json.load(f)["features"]:
-                if ft["properties"]["firms"] == name:
-                    return [round(v, 2) for v in shape(ft["geometry"]).bounds]
-    except (OSError, ImportError):
-        pass
-    return [round(df["longitude"].min(), 2), round(df["latitude"].min(), 2),
-            round(df["longitude"].max(), 2), round(df["latitude"].max(), 2)]
+            _BBOXES = {ft["properties"]["firms"]:
+                       [round(v, 2) for v in shape(ft["geometry"]).bounds]
+                       for ft in json.load(f)["features"]}
+    return _BBOXES.get(name)
 
 
-def build_json(name, df, steps, static, cell):
+def daily_arrays(agg, rates, terra_rates):
+    """Country totals per day, from 2000-11-01: MODIS, VIIRS, harmonized."""
+    first_viirs = (pd.Timestamp(VIIRS_START_DAY) - EPOCH).days - DAY0
+    days = pd.date_range(f"{HISTORY_START}-01",
+                         periods=len(agg["daily_modis"]), freq="D")
+    months = days.strftime("%Y-%m")
+    out_v, out_h = [], []
+    for k, (m, a, b) in enumerate(zip(months, agg["daily_modis"],
+                                      agg["daily_viirs"])):
+        out_v.append(None if k < first_viirs else int(b))
+        out_h.append(short(harmonize(m, int(a), int(b), rates, terra_rates)))
+    return {"modis": agg["daily_modis"].astype(int).tolist(),
+            "viirs": out_v, "harmonized": out_h}
+
+
+def build_json(name, agg, global_rate, global_terra):
     """Everything the website needs for one country, as a Python dict."""
-    last_day = df["acq_date"].max()
-    months = month_list(last_day[:7])
-    m_index = {m: k for k, m in enumerate(months)}
+    meta, grid, static = agg["meta"], agg["grid"], agg["static"]
+    monthly = monthly_table(agg)
+    months = monthly["month"].tolist()
+    first = ym_of(HISTORY_START)
 
-    cells = grid(df, cell)
-    monthly = (cells.groupby("month")[["modis", "viirs", "frp_modis",
-                                       "frp_viirs"]].sum()
-               .reindex(months, fill_value=0).reset_index()
-               .rename(columns={"index": "month"}))
-
-    rates, rate_source, n_ratios = learn_rates(monthly)
-
-    # Terra-only rate: the same method, but MODIS = Terra fires only.
-    terra = df[(df["sensor"] == "MODIS")
-               & df["satellite"].astype(str).str.upper().str.startswith("T")]
-    terra_monthly = monthly[["month", "viirs"]].assign(
-        modis=terra.groupby(terra["acq_date"].str[:7]).size()
-        .reindex(monthly["month"], fill_value=0).values)
-    terra_rates, _, _ = learn_rates(terra_monthly)
-
+    rates, rate_source, n_ratios, terra_rates, _ = country_rates(
+        monthly, global_rate, global_terra)
     monthly["h"] = [harmonize(m, a, b, rates, terra_rates) for m, a, b in
                     zip(monthly["month"], monthly["modis"], monthly["viirs"])]
-    validation, pairs = validate(monthly)
+    validation, pairs = validate(monthly, global_rate)
 
     before_viirs = monthly["month"] < VIIRS_START_DAY[:7]
     totals = {
@@ -470,17 +650,18 @@ def build_json(name, df, steps, static, cell):
 
     # Squares: only months with at least one fire.
     cell_map = {}
-    for row in cells.itertuples(index=False):
-        h = harmonize(row.month, row.modis, row.viirs, rates, terra_rates)
+    for row in grid.itertuples(index=False):
+        month = ym_str(row.ym)
+        h = harmonize(month, row.n_modis, row.n_viirs, rates, terra_rates)
         cell_map.setdefault(f"{row.i}_{row.j}", []).append(
-            [m_index[row.month], int(row.modis), int(row.viirs), short(h),
-             short(row.frp_modis, 0), short(row.frp_viirs, 0)])
+            [int(row.ym) - first, int(row.n_modis), int(row.n_viirs),
+             short(h), short(row.frp_modis, 0), short(row.frp_viirs, 0)])
 
     data = {
         "name": name.replace("_", " "), "slug": slug_of(name),
         "firms_name": name,
-        "bbox": country_bbox(name, df),
-        "cell_size": cell,
+        "bbox": country_bbox(name),
+        "cell_size": meta["cell"],
         "months": months,
         "totals": totals,
         "rates": rates, "rate_source": rate_source, "n_ratios": n_ratios,
@@ -488,41 +669,27 @@ def build_json(name, df, steps, static, cell):
         "rates_terra": terra_rates,
         "terra_only_months": [m for m in months if m < AQUA_START],
         "validation": validation,
-        "cleaning": steps,
+        "cleaning": meta["steps"],
         "static_cells": {
             "count": int(len(static)),
             "top": static.head(50)[["lat", "lon", "detections"]]
             .values.tolist()},
         "partial_months": {m: r for m, r in PARTIAL_MONTHS.items()
-                           if m in m_index},
+                           if m in months},
         "days_start": f"{HISTORY_START}-01",
-        "daily": daily_arrays(df, rates, terra_rates, last_day),
+        "daily": daily_arrays(agg, rates, terra_rates),
         # Square key "i_j": south-west corner = (i x cell_size, j x cell_size).
         "cell_fields": ["month_index", "modis", "viirs", "harmonized",
                         "frp_modis_mw", "frp_viirs_mw"],
         "cells": cell_map,
     }
-    return data, monthly, pairs, cells
-
-
-def write_points(name, df):
-    """Showcase countries: every clean fire dot, one CSV per year."""
-    folder = OUT_POINTS / slug_of(name)
-    if folder.exists():
-        shutil.rmtree(folder)       # old files from an earlier run
-    folder.mkdir(parents=True)
-    pts = pd.DataFrame({
-        "lat": df["latitude"].round(4), "lon": df["longitude"].round(4),
-        "date": df["acq_date"], "time": df["acq_time"].str.zfill(4),
-        "sensor": df["sensor"], "confidence": df["confidence"],
-        "frp": df["frp"], "satellite": df["satellite"],
-    }).sort_values(["date", "time"])
-    sizes = {}
-    for year, g in pts.groupby(pts["date"].str[:4]):
-        path = folder / f"{year}.csv"
-        g.to_csv(path, index=False)
-        sizes[year] = path.stat().st_size
-    return folder, sizes
+    if data["bbox"] is None:      # no polygon (tiny island): use the squares
+        c = meta["cell"]
+        data["bbox"] = [round(grid["j"].min() * c, 2),
+                        round(grid["i"].min() * c, 2),
+                        round((grid["j"].max() + 1) * c, 2),
+                        round((grid["i"].max() + 1) * c, 2)]
+    return data, monthly, pairs
 
 
 def check_image(name, monthly, rates, terra_rates, pairs, validation):
@@ -545,13 +712,20 @@ def check_image(name, monthly, rates, terra_rates, pairs, validation):
     ax[0].set_title(f"(a) {name.replace('_', ' ')}: monthly hotspots")
     ax[0].legend()
 
-    cal = range(1, 13)
+    cal = list(range(1, 13))
     r = [rates[str(c)]["rate"] for c in cal]
-    lo = [r[k] - (rates[str(c)]["q25"] or r[k]) for k, c in enumerate(cal)]
-    hi = [(rates[str(c)]["q75"] or r[k]) - r[k] for k, c in enumerate(cal)]
-    ax[1].bar(cal, r, color="#2f5bea", alpha=0.75, label="Terra + Aqua")
-    ax[1].errorbar(cal, r, yerr=[lo, hi], fmt="none", color="black",
-                   capsize=3)
+    own = [rates[str(c)]["src"] == "month" for c in cal]
+    ax[1].bar(cal, r, color="#2f5bea", alpha=0.75, label="Terra + Aqua",
+              hatch=["" if o else "//" for o in own])
+    # q25-q75 lines only for months with their OWN median. Months using a
+    # backup rate (pooled / global, hatched) have too few years for a range.
+    mc = [c for c, o in zip(cal, own) if o]
+    mr = [rates[str(c)]["rate"] for c in mc]
+    lo = [max(0, x - rates[str(c)]["q25"]) for c, x in zip(mc, mr)]
+    hi = [max(0, rates[str(c)]["q75"] - x) for c, x in zip(mc, mr)]
+    if mc:
+        ax[1].errorbar(mc, mr, yerr=[lo, hi], fmt="none", color="black",
+                       capsize=3)
     ax[1].plot(cal, [terra_rates[str(c)]["rate"] for c in cal], "o",
                color="#e8613a", label="Terra only (before Jul 2002)")
     ax[1].legend(fontsize=8)
@@ -560,7 +734,8 @@ def check_image(name, monthly, rates, terra_rates, pairs, validation):
                    color="white")
     ax[1].set_xticks(list(cal))
     ax[1].set_title("(b) exchange rate VIIRS/MODIS per month\n"
-                    "(bar = median, line = q25-q75, number = years)")
+                    "(bar = median, line = q25-q75, number = years,\n"
+                    "hatched = too few years, backup rate used)")
 
     mx = max(pairs["pred"].max(), pairs["real"].max(), 1) * 1.05
     ax[2].scatter(pairs["real"], pairs["pred"], color="#1a9e75", s=18)
@@ -579,67 +754,34 @@ def check_image(name, monthly, rates, terra_rates, pairs, validation):
     return path
 
 
-def save_history(name, df, static, cells):
-    """Keep history aggregates in data_work, so later stages (and new days)
-    don't need to read the 7 GB again."""
-    folder = config.WORK_DIR / slug_of(name)
-    folder.mkdir(parents=True, exist_ok=True)
-    cells.to_parquet(folder / f"cells_{cells.attrs.get('cell', CELL)}.parquet")
-    static.to_parquet(folder / "static_cells.parquet")
-    (df.groupby(["acq_date", "sensor"]).size().rename("n").reset_index()
-     .to_parquet(folder / "daily.parquet"))
-
-
-def process_country(name, verbose=True):
-    """The whole pipeline for one country. Returns a small summary dict."""
-    raw = load_country(name)
-    if raw is None or raw.empty:
-        print(f"{name}: no data")
-        return None
-    df, steps, static = clean(raw)
-    if df.empty:
-        print(f"{name}: nothing left after cleaning")
-        return None
-
-    # Try 0.1 degree squares; if the file gets too big, use 0.25.
-    for cell in (CELL, BIG_CELL):
-        data, monthly, pairs, cells = build_json(name, df, steps, static,
-                                                 cell)
-        text = json.dumps(data, separators=(",", ":"))
-        if len(text) / 1e6 <= MAX_JSON_MB:
-            break
-    cells.attrs["cell"] = cell
-
+def export_country(name, agg, global_rate, global_terra, image=False):
+    """Write the country JSON (and check image). Returns a summary."""
+    data, monthly, pairs = build_json(name, agg, global_rate, global_terra)
     OUT_COUNTRY.mkdir(parents=True, exist_ok=True)
-    out = OUT_COUNTRY / f"{slug_of(name)}.json"
-    out.write_text(text, encoding="utf-8")
-    save_history(name, df, static, cells)
-
-    points = write_points(name, df) if name in SHOWCASE else None
-    image = check_image(name, monthly, data["rates"], data["rates_terra"],
-                        pairs, data["validation"])
-
-    if verbose:
-        report(name, raw, df, data, monthly, static, out, points, image)
-    return {"name": name, "json": out, "size": out.stat().st_size,
-            "data": data}
+    out = OUT_COUNTRY / f"{data['slug']}.json"
+    out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    path = (check_image(name, monthly, data["rates"], data["rates_terra"],
+                        pairs, data["validation"]) if image else None)
+    return {"data": data, "monthly": monthly, "json": out, "image": path}
 
 
 # ---------------------------------------------------------------------------
-# REPORT (printed, for us to check the science)
+# REPORT for one country (printed, for us to check the science)
 # ---------------------------------------------------------------------------
-def report(name, raw, df, data, monthly, static, out, points, image):
+def report(name, agg, result):
+    data, monthly, static = result["data"], result["monthly"], agg["static"]
     print(f"\n{'=' * 70}\n{name}\n{'=' * 70}")
 
     print("\nCLEANING (rows removed per step)")
-    print(f"  {'step':48s} {'MODIS':>16s} {'VIIRS':>16s}")
+    print(f"  {'step':54s} {'MODIS':>18s} {'VIIRS':>20s}")
     for s in data["cleaning"]:
         cols = [f"-{s[k]['removed']:,} of {s[k]['before']:,}"
                 for k in ("MODIS", "VIIRS")]
-        print(f"  {s['step']:48s} {cols[0]:>16s} {cols[1]:>16s}")
-    left = df["sensor"].value_counts()
-    print(f"  {'left after cleaning':48s} {left.get('MODIS', 0):>16,} "
-          f"{left.get('VIIRS', 0):>16,}")
+        print(f"  {s['step']:54s} {cols[0]:>18s} {cols[1]:>20s}")
+    left = {k: s[k]["before"] - s[k]["removed"]
+            for s in data["cleaning"][-1:] for k in ("MODIS", "VIIRS")}
+    print(f"  {'left after cleaning':54s} {left['MODIS']:>18,} "
+          f"{left['VIIRS']:>20,}")
 
     print("\nEXCHANGE RATES (VIIRS / MODIS), learned on 2012-02..2025-12")
     names = "Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split()
@@ -649,74 +791,178 @@ def report(name, raw, df, data, monthly, static, out, points, image):
               f"{r['q75']}   years {r['n']:>2}   ({r['src']})")
     print(f"  rate source: {data['rate_source']}, valid ratios: "
           f"{data['n_ratios']}")
+    t = data["rates_terra"]
+    print("  Terra-only (2000-11..2002-06): "
+          + "  ".join(f"{names[c - 1]} {t[str(c)]['rate']}"
+                      for c in range(1, 13)))
 
     v = data["validation"]
     print("\nVALIDATION (learn 2015-2025, predict 2012-02..2014-12)")
-    print(f"  months tested: {v['months']}")
-    print(f"  median absolute error: {v['median_abs_error_pct']}% "
-          f"(months with VIIRS >= {MIN_VIIRS_FOR_ERROR})")
-    print(f"  Pearson r: {v['pearson_r']}")
-    print(f"  total bias: {v['bias_pct']}%")
+    print(f"  months tested: {v['months']}, median absolute error: "
+          f"{v['median_abs_error_pct']}%, Pearson r: {v['pearson_r']}, "
+          f"total bias: {v['bias_pct']}%")
     print(f"  leave-one-year-out mean error: {v['loyo_mean_error_pct']}% "
           f"({v['loyo_years']} years)")
 
-    t = data["rates_terra"]
-    print("\nTERRA-ONLY RATES (used for " + data["terra_only_months"][0]
-          + ".." + data["terra_only_months"][-1] + "):  "
-          + "  ".join(f"{names[c - 1]} {t[str(c)]['rate']}"
-                      for c in range(1, 13))
-          if data["terra_only_months"] else "")
-
     print(f"\nSTATIC PLACES: {len(static)} squares (+ ring) removed. Biggest:")
-    print(static.head(8)[["lat", "lon", "busy_years", "max_months",
+    print(static.head(5)[["lat", "lon", "busy_years", "max_months",
                           "detections"]].to_string(index=False))
 
-    # Checks the plan asks for (useful for any country).
     def near(lat, lon, d=0.1):
         s = static[(abs(static["lat"] - lat) < d)
                    & (abs(static["lon"] - lon) < d)]
         return f"YES ({len(s)} squares)" if len(s) else "no"
     if name == "Uzbekistan":
+        jul = monthly.set_index("month").loc["2025-07"]
         print(f"\nCHECKS\n  Angren (41.0 N, 70.1 E) static: {near(41.0, 70.1)}")
         print(f"  Industrial site (38.05 N, 67.27 E) static: "
               f"{near(38.05, 67.27)}")
-        jul = df[df["acq_date"].str[:7] == "2025-07"]["sensor"].value_counts()
-        print(f"  July 2025 after cleaning: MODIS {jul.get('MODIS', 0)}, "
-              f"VIIRS {jul.get('VIIRS', 0)}   (prototype: MODIS 225, VIIRS 807)")
+        print(f"  July 2025 after cleaning: MODIS {jul['modis']}, VIIRS "
+              f"{jul['viirs']}   (prototype: MODIS 225, VIIRS 807)")
 
-    # MODIS before July 2002 = Terra only (Aqua MODIS started 4 Jul 2002).
-    m = raw[raw["sensor"] == "MODIS"]
-    sat = m.groupby([m["acq_date"].str[:4], "satellite"]).size().unstack(
-        fill_value=0)
-    print("\nMODIS satellites per year (Terra only before Jul 2002):")
-    print(sat.loc[[y for y in ("2001", "2002", "2003", "2015", "2025")
-                   if y in sat.index]].to_string())
-
-    print(f"\nOUTPUT\n  {out}  ({out.stat().st_size / 1e6:.2f} MB, "
-          f"cell {data['cell_size']} deg, {len(data['cells'])} squares, "
+    out = result["json"]
+    print(f"\nOUTPUT\n  {out}  ({out.stat().st_size / 1e6:.2f} MB, cell "
+          f"{data['cell_size']} deg, {len(data['cells'])} squares, "
           f"{len(data['months'])} months)")
-    if points:
-        folder, sizes = points
-        print(f"  {folder}  ({len(sizes)} yearly CSV files, "
-              f"{sum(sizes.values()) / 1e6:.2f} MB)")
-    print(f"  check image: {image}")
+    if result["image"]:
+        print(f"  check image: {result['image']}")
+
+
+# ---------------------------------------------------------------------------
+# --all: every country, global rate, summary files
+# ---------------------------------------------------------------------------
+def run_all(fresh):
+    from countries import firms_names
+    names = sorted(firms_names())
+    t0 = time.time()
+
+    # 1) Heavy part: aggregate each country (skips countries already done,
+    #    so a crash or a restart doesn't lose the work).
+    print(f"Aggregating {len(names)} countries (year by year)...")
+    for k, name in enumerate(names, 1):
+        if not fresh and (work_dir(name) / "meta.json").exists():
+            continue
+        t = time.time()
+        meta = aggregate_country(name)
+        size = (f"cell {meta['cell']}" if meta else "no data")
+        print(f"  [{k}/{len(names)}] {name}: {size} "
+              f"({time.time() - t:.0f} s)", flush=True)
+
+    # 2) Global median rate from the countries with good data.
+    aggs = {n: a for n in names if (a := load_aggregates(n)) is not None}
+    good, good_terra = [], []
+    for name, agg in aggs.items():
+        _, src, _, terra_rates, tsrc = country_rates(
+            monthly_table(agg), PLACEHOLDER_GLOBAL, PLACEHOLDER_GLOBAL)
+        rates = learn_rates(monthly_table(agg))[0]
+        if src == "country":
+            good += [r["rate"] for r in rates.values()]
+        if tsrc == "country":
+            good_terra += [r["rate"] for r in terra_rates.values()]
+    global_rate = round(float(np.median(good)), 2)
+    global_terra = round(float(np.median(good_terra)), 2)
+    GLOBAL_FILE.write_text(json.dumps({
+        "rate": global_rate, "terra_rate": global_terra,
+        "countries": len(good) // 12, "terra_countries": len(good_terra) // 12}))
+
+    # 3) Export every country with the real global rate.
+    print("\nExporting JSON files...")
+    rows, listing, statics = [], [], []
+    for name, agg in aggs.items():
+        res = export_country(name, agg, global_rate, global_terra,
+                             image=name in CHECK_IMAGES)
+        d = res["data"]
+        total_h = sum(h for h in d["totals"]["harmonized"] if h)
+        if total_h <= 0:
+            res["json"].unlink()          # no hotspots: skip this country
+            continue
+        rate_avg = round(float(np.mean([r["rate"]
+                                        for r in d["rates"].values()])), 2)
+        v = d["validation"]
+        listing.append({"name": d["name"], "slug": d["slug"],
+                        "bbox": d["bbox"], "total_H": round(total_h),
+                        "rate_avg": rate_avg,
+                        "validation_error": v["median_abs_error_pct"]})
+        row = {"country": d["name"], "slug": d["slug"],
+               "rate_source": d["rate_source"], "n_ratios": d["n_ratios"],
+               "cell_size": d["cell_size"], "rate_avg": rate_avg}
+        row.update({f"rate_{c:02d}": d["rates"][str(c)]["rate"]
+                    for c in range(1, 13)})
+        row.update({f"terra_rate_{c:02d}": d["rates_terra"][str(c)]["rate"]
+                    for c in range(1, 13)})
+        row.update({"val_median_abs_error_pct": v["median_abs_error_pct"],
+                    "val_pearson_r": v["pearson_r"],
+                    "val_bias_pct": v["bias_pct"],
+                    "val_loyo_mean_error_pct": v["loyo_mean_error_pct"],
+                    "total_H": round(total_h)})
+        rows.append(row)
+        s = agg["static"]
+        if len(s):
+            statics.append(pd.DataFrame({"country": name, "lat": s["lat"],
+                                         "lon": s["lon"]}))
+        if name == "Uzbekistan" or res["image"]:
+            report(name, agg, res) if name == "Uzbekistan" else None
+
+    listing.sort(key=lambda x: x["name"])
+    (config.WEB_DATA_DIR / "countries.json").write_text(
+        json.dumps(listing, separators=(",", ":")), encoding="utf-8")
+    pd.DataFrame(rows).sort_values("country").to_csv(
+        config.WEB_DATA_DIR / "rates_summary.csv", index=False)
+    # Static places for the Stage 6 robot (it can't read data_work).
+    pd.concat(statics).to_csv(STATIC_LIST, index=False)
+
+    # 4) Summary printout.
+    files = [p for p in config.WEB_DATA_DIR.rglob("*") if p.is_file()]
+    total = sum(p.stat().st_size for p in files)
+    big = sorted(files, key=lambda p: -p.stat().st_size)[:10]
+    n_global = sum(r["rate_source"] == "global" for r in rows)
+    print(f"\n{'=' * 70}\nSTAGE 3 SUMMARY ({(time.time() - t0) / 60:.0f} min)")
+    print(f"  countries with hotspots: {len(listing)}")
+    print(f"  global median rate: {global_rate} (from {len(good) // 12} "
+          f"countries), Terra-only: {global_terra}")
+    print(f"  countries using the global rate: {n_global}")
+    print(f"  cell sizes: {pd.Series([r['cell_size'] for r in rows]).value_counts().to_dict()}")
+    print(f"  web/data total: {total / 1e6:.1f} MB "
+          f"({'OK' if total < 300e6 else 'over the plan 300 MB, team kept it'}, "
+          f"GitHub Pages limit 1 GB)")
+    over = [p for p in files if p.stat().st_size > 50e6]
+    print(f"  files over 50 MB: {[p.name for p in over] or 'none'}")
+    print("  10 biggest files:")
+    for p in big:
+        print(f"    {p.stat().st_size / 1e6:6.2f} MB  "
+              f"{p.relative_to(config.WEB_DATA_DIR)}")
+    print(f"  static places list: {STATIC_LIST} "
+          f"({sum(len(s) for s in statics)} squares)")
+    print(f"  check images: {config.CHECKS_DIR}")
+
+
+def run_one(name, fresh):
+    if fresh or load_aggregates(name) is None:
+        if aggregate_country(name) is None:
+            print(f"{name}: no data")
+            return
+    g = (json.loads(GLOBAL_FILE.read_text()) if GLOBAL_FILE.exists()
+         else {"rate": PLACEHOLDER_GLOBAL, "terra_rate": PLACEHOLDER_GLOBAL})
+    agg = load_aggregates(name)
+    res = export_country(name, agg, g["rate"], g["terra_rate"], image=True)
+    report(name, agg, res)
 
 
 def main():
-    ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
+    ap = argparse.ArgumentParser(description="HotSync processing")
     ap.add_argument("--country", help="FIRMS name, e.g. Uzbekistan")
     ap.add_argument("--all", action="store_true", help="every country")
+    ap.add_argument("--fresh", action="store_true",
+                    help="re-read the zips, don't reuse saved work")
     args = ap.parse_args()
+    config.make_folders()
     if args.country:
-        process_country(args.country)
+        run_one(args.country, args.fresh)
     elif args.all:
-        from countries import firms_names
-        for name in sorted(firms_names()):
-            s = process_country(name, verbose=False)
-            if s:
-                print(f"{name}: {s['size'] / 1e6:.2f} MB")
+        run_all(args.fresh)
     else:
         ap.print_help()
+        sys.exit(1)
 
 
 if __name__ == "__main__":
