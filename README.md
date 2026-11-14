@@ -27,3 +27,8 @@ python -m http.server 8000      # then open http://localhost:8000/web/
 ```
 
 See `SPEC.md` for the full plan. This is a practice app; the real project is written again at the hackathon.
+
+## Use of AI
+
+The code was written with help from AI (Claude Code). The idea and the method choices
+(cleaning rules, the "exchange rate" harmonization, validation) are the team's.

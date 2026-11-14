@@ -10,7 +10,8 @@ No login is needed. The files are big (about 7 GB in total), so the script:
     - skips files that are already fully downloaded,
     - downloads into "<name>.part" and renames it only when it is complete,
       so a half-downloaded file never looks like a finished one,
-    - continues a broken download from where it stopped (resume).
+    - continues a broken download from where it stopped (resume),
+    - checks each finished file is a real zip (zipfile.is_zipfile).
 
 Run it from the hotsync-practice folder:
     python download_firms.py
@@ -21,6 +22,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import zipfile
 from pathlib import Path
 
 import config
@@ -72,8 +74,10 @@ def download(name, folder):
         try:
             total = remote_size(url)
 
-            # Already finished earlier, and the size matches -> nothing to do.
-            if final.exists() and final.stat().st_size == total:
+            # Already finished earlier, size matches, and it is a real zip
+            # -> nothing to do.
+            if (final.exists() and final.stat().st_size == total
+                    and zipfile.is_zipfile(final)):
                 return "skipped"
 
             # Resume: if a .part file exists, ask only for the missing bytes.
@@ -105,6 +109,10 @@ def download(name, folder):
 
             if part.stat().st_size != total:
                 raise IOError(f"size {part.stat().st_size} != {total}")
+            # Right size but not a valid zip -> throw it away, try again.
+            if not zipfile.is_zipfile(part):
+                part.unlink()
+                raise IOError("downloaded file is not a valid zip")
             part.replace(final)       # complete -> give it the real name
             return "done"
 

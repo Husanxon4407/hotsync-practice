@@ -14,3 +14,11 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
 - `.gitignore` now ignores `.env`, `firms_key.txt`, `*.part`, `*.parquet`, `data_raw/`, `data_work/`.
 - `download_firms.py` now reads its folder from `config.py`.
 - Copied the logo into `web/assets/` so the site works when served from `web/` (it used `../assets/` before).
+
+## 2026-11-14 ~16:30 · Stage 1: check the raw data
+- New `check_data.py`: 40/40 zips OK (MODIS 26, VIIRS 14), 6.96 GB, no missing or broken files.
+- Zip pattern `modis/<Y>/modis_<Y>_<Country>.csv` and `viirs-snpp/<Y>/viirs-snpp_<Y>_<Country>.csv`;
+  VIIRS columns = MODIS columns but `bright_ti4`/`bright_ti5` instead of `brightness`/`bright_t31`.
+- 233 MODIS / 236 VIIRS country names (232 in both). No 2026 files yet (expected, Stage 6).
+- `download_firms.py` now validates each zip with `zipfile.is_zipfile`. README has the AI disclosure.
+- **Decision for Stage 2:** also store the sum of fire power (FRP) per cell per month (team approved).
