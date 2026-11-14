@@ -98,9 +98,20 @@ If the chat restarts: read `HOTSYNC_PLAN.md` and this file first.
   9 World wording ("Whole world"). 10 `renderProof()`: why not 100% + verdict word. 11 `mergeRecent()`: nulls if a year file fails.
   12 Limits: MODIS orbit drift + NOAA-20 days. 13 `check_all_countries.py`.
 
+
+## 2026-11-15 ~00:30 · Stage 7, extra 1: shareable links + plain-language pass
+- The address bar describes the view: place, dates, calendar view, square view, drawn box/shape, chosen month/day,
+  fire dots, live layer, satellite picture, map position. Opening the link shows the same view; "🔗 Copy link" button
+  (with a fallback when the clipboard waits); menu links scroll without replacing the link. Tested on the live site
+  (Brazil + box + Sept 2020 + dots, round trip after reload, World "vs normal").
+- Plain words everywhere: "fair count" (harmonized), "MODIS saw / VIIRS saw" (raw), "vs normal" (anomaly), "Fire calendar";
+  new "What is this?" sentence and a "How to use" line; tooltips rewritten.
+- index.html loads app.js/style.css with ?v=… (change it on every update) so browsers don't keep old code for 10 min.
+- My Chrome automation can open the live https site (not localhost): test there after each upload.
+
 ---
 ## WHERE WE STOPPED (2026-11-14 ~22:30) — read this first after a restart
-**Stage 6 is half done.** Code committed (ed19044), not pushed.
+**Stage 6 is done (browser check on the live site by the team). Stage 7: extra 1 done; next extra 2 (print report).** Code committed (ed19044), not pushed.
 **Running overnight:** `python update_recent.py --fill-gaps 2026-01-01 --skip-live` (backfill, limited by the FIRMS key: ~3–4 h).
 If it stopped: just run the same command again (it only fetches missing days).
 **Then:**
