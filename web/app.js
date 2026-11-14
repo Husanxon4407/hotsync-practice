@@ -314,6 +314,112 @@ function renderUpdated() {
   chip.title = `Last update: ${recent.meta.last_updated} (UTC). A robot on GitHub adds new fires from NASA FIRMS.`;
 }
 
+// ------------------------------------------------------------------ SHAREABLE LINKS (Stage 7, extra 1)
+// The address bar always describes what you see, e.g.
+//   #c=brazil&from=2019-01&to=2021-12&mode=normal&m=2020-09&v=-10.5,-55.2,5
+// Opening such a link shows exactly the same view (great for our video).
+const MODE_CODE = { harmonized: "fair", modis: "modis", viirs: "viirs", anomaly: "normal" };
+const SQ_CODE = { harmonized: "fair", modis: "modis", viirs: "viirs", off: "off" };
+const PIC_CODE = { MODIS_Terra_CorrectedReflectance_Bands721: "721", VIIRS_NOAA20_CorrectedReflectance_TrueColor: "tc" };
+const flip = (o) => Object.fromEntries(Object.entries(o).map(([k, v]) => [v, k]));
+const okMonth = (x) => /^\d{4}-\d{2}$/.test(x || "");
+const okDay = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x || "");
+let applyingHash = false, lastHash = "";
+
+// Read the link (null when the hash is just a section like #calendar)
+function readHash() {
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h.includes("=")) return null;
+  return Object.fromEntries(new URLSearchParams(h));
+}
+
+// Write the current view into the address bar (no new history entries)
+function writeHash() {
+  if (applyingHash || !state.c || !map) return;
+  const p = new URLSearchParams();
+  p.set("c", state.c.slug);
+  p.set("from", state.from);
+  p.set("to", state.to);
+  if (state.calMode !== "harmonized") p.set("mode", MODE_CODE[state.calMode]);
+  if (state.squareMode !== "harmonized") p.set("sq", SQ_CODE[state.squareMode]);
+  if (state.area) {
+    const layer = state.area.layer;
+    if (layer instanceof L.Rectangle) {
+      const b = layer.getBounds();
+      p.set("box", [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()].map((x) => +x.toFixed(3)).join(","));
+    } else {
+      p.set("shape", layer.getLatLngs()[0].map((q) => `${+q.lng.toFixed(3)},${+q.lat.toFixed(3)}`).join(";"));
+    }
+  }
+  if (state.period.kind === "month") p.set("m", state.c.months[state.period.mi]);
+  else if (state.period.kind === "day") p.set("day", state.period.day);
+  if (state.day && state.day !== dayAt(state.c.daily.modis.length - 1)) p.set("d", state.day);
+  const f = state.fire;
+  if (f.on) p.set("dots", `${f.date},${f.span},${f.modis ? "m" : ""}${f.viirs ? "v" : ""}`);
+  if (state.live) p.set("live", "1");
+  if (state.gibs.on) p.set("pic", `${PIC_CODE[state.gibs.layer]},${state.gibs.date}`);
+  const cen = map.getCenter();
+  p.set("v", `${cen.lat.toFixed(2)},${cen.lng.toFixed(2)},${map.getZoom()}`);
+  const h = "#" + p.toString().replace(/%2C/g, ",").replace(/%3B/g, ";");
+  if (h !== location.hash) history.replaceState(null, "", h);
+  lastHash = h;
+}
+
+// Apply a shared link after its place has loaded
+function applyHash(H) {
+  const c = state.c, shape = { color: "#2f5bea", weight: 2, fillOpacity: 0.05 };
+  if (H.box) {
+    const [w, s, e, n] = H.box.split(",").map(Number);
+    if ([w, s, e, n].every(Number.isFinite) && w < e && s < n) useArea(L.rectangle([[s, w], [n, e]], shape), `Shared box ${w}, ${s}, ${e}, ${n}`);
+  } else if (H.shape) {
+    const pts = H.shape.split(";").map((t) => t.split(",").map(Number)).filter((q) => q.length === 2 && q.every(Number.isFinite));
+    if (pts.length >= 3) useArea(L.polygon(pts.map(([x, y]) => [y, x]), shape), "Shared shape");
+  }
+  if (okMonth(H.m) && c.months.includes(H.m)) {
+    state.period = { kind: "month", mi: c.months.indexOf(H.m) };
+    state.normalMonth = +H.m.slice(5, 7);
+    state.normalYear = +H.m.slice(0, 4);
+  } else if (okDay(H.day)) {
+    state.period = { kind: "day", day: clampDay(H.day) };
+  }
+  if (okDay(H.d)) state.day = clampDay(H.d);
+  if (H.dots) {
+    const [d, span, sens = ""] = H.dots.split(",");
+    if (okDay(d) && SPANS.some(([k]) => k === span)) {
+      Object.assign(state.fire, { on: true, date: picDate(d), span, modis: sens.includes("m"), viirs: sens.includes("v") });
+      setSeg($("fireSpan"), span);
+    }
+  }
+  if (H.live === "1") state.live = true;
+  if (H.pic) {
+    const [code, d] = H.pic.split(","), layer = flip(PIC_CODE)[code];
+    if (layer && okDay(d)) state.gibs = { on: true, layer, date: picDate(d) };
+  }
+  render();
+  if (state.live) renderLive();
+  if (H.v) {
+    const [la, lo, z] = H.v.split(",").map(Number);
+    if ([la, lo, z].every(Number.isFinite)) map.setView([la, lo], z, { animate: false });
+  }
+}
+
+// "Copy link" button: copy the address, with a fallback for old browsers
+async function copyLink() {
+  writeHash();
+  const url = location.href;
+  try {
+    await navigator.clipboard.writeText(url);
+  } catch (e) {
+    const t = document.createElement("textarea");
+    t.value = url; document.body.appendChild(t); t.select();
+    document.execCommand("copy"); t.remove();
+  }
+  const b = $("shareBtn");
+  b.classList.add("copied"); b.textContent = "✓ Link copied";
+  setTimeout(() => { b.classList.remove("copied"); b.textContent = "🔗 Copy link"; }, 2500);
+  toast("Link copied: paste it anywhere to share exactly this view");
+}
+
 async function start() {
   try {
     setLoading("Loading the country list…");
@@ -329,6 +435,15 @@ async function start() {
     return;
   }
   $("countryList").innerHTML = state.countries.map((c) => `<option value="${c.name}"></option>`).join("");
+
+  // A shared link? Take its dates and views BEFORE the buttons are built.
+  const H = readHash();
+  if (H) {
+    if (okMonth(H.from)) state.from = H.from;
+    if (okMonth(H.to)) state.to = H.to;
+    if (flip(MODE_CODE)[H.mode]) state.calMode = flip(MODE_CODE)[H.mode];
+    if (flip(SQ_CODE)[H.sq]) state.squareMode = flip(SQ_CODE)[H.sq];
+  }
   buildControls();
   initMap();
   buildDayChart();
@@ -336,7 +451,28 @@ async function start() {
   setupReveal();
   setupScrollSpy();
   renderUpdated();
-  await chooseCountry(DEFAULT_COUNTRY);
+
+  applyingHash = true;                       // don't rewrite the link while we read it
+  const slug = H && state.countries.some((c) => c.slug === H.c) ? H.c : DEFAULT_COUNTRY;
+  await chooseCountry(slug);
+  if (H) applyHash(H);
+  applyingHash = false;
+  writeHash();
+
+  // Keep the link up to date while the map moves; open other shared links.
+  let t;
+  map.on("moveend", () => { clearTimeout(t); t = setTimeout(writeHash, 300); });
+  window.addEventListener("hashchange", () => {
+    if (location.hash === lastHash) return;
+    if (readHash()) location.reload();       // another shared link pasted in
+  });
+  $("shareBtn").addEventListener("click", copyLink);
+  // Menu links scroll to their section WITHOUT replacing the shared link.
+  document.querySelectorAll("nav.sections a").forEach((a) => a.addEventListener("click", (e) => {
+    e.preventDefault();
+    const el = document.querySelector(a.getAttribute("href"));
+    if (el) el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
+  }));
 }
 
 // Load one country (only when it is chosen) and keep it in memory.
@@ -418,9 +554,9 @@ function buildControls() {
   $("resetAreaBtn").addEventListener("click", () => { clearArea(true); render(); });
 
   // Calendar mode + square mode
-  makeSeg($("calSeg"), [["harmonized", "Harmonized"], ["modis", "Raw MODIS"], ["viirs", "Raw VIIRS"], ["anomaly", "Anomaly"]],
+  makeSeg($("calSeg"), [["harmonized", "Fair count"], ["modis", "MODIS saw"], ["viirs", "VIIRS saw"], ["anomaly", "vs normal"]],
     state.calMode, (k) => { state.calMode = k; renderCalendar(); });
-  makeSeg($("squareSeg"), [["harmonized", "Harmonized"], ["modis", "MODIS"], ["viirs", "VIIRS"], ["off", "None"]],
+  makeSeg($("squareSeg"), [["harmonized", "Fair count"], ["modis", "MODIS saw"], ["viirs", "VIIRS saw"], ["off", "Hide"]],
     state.squareMode, (k) => { state.squareMode = k; renderMap(); });
 
   $("periodResetBtn").addEventListener("click", () => { state.period = { kind: "range" }; render(); });
@@ -604,6 +740,7 @@ function render() {
   renderNormal();
   renderHow();
   renderGibs();
+  writeHash();                 // keep the shareable link up to date
 }
 
 // When the theme changes, things drawn with JS colours must be repainted.
@@ -652,12 +789,12 @@ function renderHeader() {
   if (part > 0.05 && full < 12) dots += `<span class="ex-dot part"><i style="width:${Math.round(part * 100)}%"></i></span>`;
   $("exDots").innerHTML = dots;
   const notes = [];
-  if (c.months[a] >= "2012-02") notes.push("<b>Not needed for these dates: VIIRS was flying, so harmonized = real VIIRS.</b>");
+  if (c.months[a] >= "2012-02") notes.push("<b>Not needed for these dates: VIIRS was already flying, so the fair count is simply what VIIRS saw.</b>");
   if (isWorld()) notes.push("Every country uses its own rate; pick a country to see it.");
   if (c.rate_source === "global") notes.push("<b>Few fires here, so we use the world median rate.</b>");
   if (avg === 0) notes.push("<b>Rate 0:</b> MODIS sees hot places here that VIIRS does not count as fires, so MODIS-only years become 0.");
-  $("exCap").innerHTML = `VIIRS hotspots for every 1 MODIS hotspot in ${countryName()}, for your dates ` +
-    `(the "exchange rate": each month's rate, weighted by its MODIS fires).` + (notes.length ? "<br>" + notes.join(" ") : "");
+  $("exCap").innerHTML = `fires seen by VIIRS for every 1 fire seen by MODIS in ${countryName()}, for your dates. ` +
+    `We call this the <b>"exchange rate"</b>: VIIRS sees more because its pixels are smaller.` + (notes.length ? "<br>" + notes.join(" ") : "");
 }
 
 // ------------------------------------------------------------------ SUMMARY CARDS + SENTENCE
@@ -689,7 +826,7 @@ function renderRealStats() {
   for (let i = i0; i <= i1; i++) if ((d.harmonized[i] || 0) > (d.harmonized[best] || 0)) best = i;
   const day = dayAt(best);
   $("kBusyDay").textContent = new Date(toUTC(day)).toLocaleDateString("en-US", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
-  $("kBusyDayS").textContent = `${fmt(d.harmonized[best])} harmonized hotspots` +
+  $("kBusyDayS").textContent = `${fmt(d.harmonized[best])} fires (fair count)` +
     (state.area ? (isWorld() ? " (whole world)" : " (whole country)") : "");
   $("kBusyDayCard").dataset.day = day;
 
@@ -722,7 +859,7 @@ function renderCards() {
   const busy = avgs.indexOf(Math.max(...avgs));
   $("kBusy").textContent = avgs[busy] >= 0 ? MONTHS_LONG[busy] : "–";
   $("kBusyS").textContent = avgs[busy] < 0 ? "No complete month in your range"
-    : counts[busy] > 1 ? `${fmt(avgs[busy])} hotspots on average (${counts[busy]} years)` : `${fmt(avgs[busy])} hotspots`;
+    : counts[busy] > 1 ? `${fmt(avgs[busy])} fires on average (${counts[busy]} years)` : `${fmt(avgs[busy])} fires`;
 
   // 3. Top 3 years: FULL years only (all 12 months in range, none missing or
   // in progress). Terra-only years (before Jul 2002) get a "*".
@@ -740,7 +877,7 @@ function renderCards() {
   if (fullYears.length >= 2) {
     $("kTop").textContent = top.map(star).join(" · ");
     $("kTop").title = anyTerra ? "* Terra only: least certain years" : "";
-    $("kTopS").textContent = top.map(([, v]) => compact(v.t)).join(" · ") + " hotspots" +
+    $("kTopS").textContent = top.map(([, v]) => compact(v.t)).join(" · ") + " fires" +
       (anyTerra ? " · * Terra only: least certain years" : "");
   } else {
     $("kTop").textContent = "–";
@@ -777,7 +914,7 @@ function renderCards() {
   let text = avgs[busy] < 0 ? "" : many ? `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> is usually the busiest month. `
     : `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> was the busiest month in your range. `;
   if (y0 === y1) {
-    text += `In ${y0}${c.months[a] !== y0 + "-01" || c.months[b] !== y0 + "-12" ? " (your months)" : ""} there were <b>${fmt(total)}</b> harmonized hotspots. `;
+    text += `In ${y0}${c.months[a] !== y0 + "-01" || c.months[b] !== y0 + "-12" ? " (your months)" : ""} there were <b>${fmt(total)}</b> fires (fair count). `;
   } else if (fullYears.length >= 2) {
     const yrs = fullYears.map(([y]) => y).sort();
     text += `<b>${star(top[0])}</b> had the most fires of the full years from ${yrs[0]} to ${yrs[yrs.length - 1]}` +
@@ -789,7 +926,7 @@ function renderCards() {
       ? `${lmName} ${verb} <b>about normal</b>.`
       : `${lmName} ${verb} <b>${Math.abs(Math.round(an))}% ${an >= 0 ? "above" : "below"} normal</b>${going ? " for the same days" : ""}.`;
   $("summary").innerHTML = text;
-  $("heroTitle").innerHTML = `${compact(total)} fair-to-compare hotspots in ${state.area ? "your area" : countryName()}, ${monthShort(state.from)} – ${monthShort(state.to)}`;
+  $("heroTitle").innerHTML = `${compact(total)} fires (fair count) in ${state.area ? "your area" : countryName()}, ${monthShort(state.from)} – ${monthShort(state.to)}`;
 }
 
 // ------------------------------------------------------------------ MAP
@@ -915,9 +1052,9 @@ function renderMap() {
   $("periodResetBtn").hidden = p.kind === "range";
 
   // Legend
-  const sq = { harmonized: "harmonized", modis: "raw MODIS", viirs: "raw VIIRS" }[state.squareMode];
+  const sq = { harmonized: "Fair count of fires", modis: "Fires MODIS saw", viirs: "Fires VIIRS saw" }[state.squareMode];
   let leg = off ? `<span class="key">Squares hidden</span>`
-    : `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} hotspots per ${state.c.cell_size}° square (1 → ${compact(max)})</span>`;
+    : `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} per square of ${state.c.cell_size}° (1 → ${compact(max)})</span>`;
   if (state.selCells && !off) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
   if (state.fire.on || state.live) {
     leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS fire dot</span>`;
@@ -927,6 +1064,7 @@ function renderMap() {
 
   renderAreaStats(a, b);
   renderFire();
+  writeHash();                 // keep the shareable link up to date
 }
 
 function squarePopup(key, latlng) {
@@ -939,9 +1077,9 @@ function squarePopup(key, latlng) {
   L.popup().setLatLng(latlng).setContent(
     `<div class="pop"><b>Square ${lat(i * cs)}–${lat((i + 1) * cs)}, ${lon(j * cs)}–${lon((j + 1) * cs)}</b>
      <div class="small">${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}</div>
-     <div class="row"><span>MODIS raw</span><b>${fmt(mo)}</b></div>
-     <div class="row"><span>VIIRS raw</span><b>${viirsNote}</b></div>
-     <div class="row"><span>Harmonized</span><b>${fmt(h)}</b></div>
+     <div class="row"><span>MODIS saw</span><b>${fmt(mo)}</b></div>
+     <div class="row"><span>VIIRS saw</span><b>${viirsNote}</b></div>
+     <div class="row"><span>Fair count</span><b>${fmt(h)}</b></div>
      ${state.selCells && !state.selCells.has(key) ? '<div class="small">Outside your area</div>' : ""}</div>`).openOn(map);
 }
 
@@ -954,7 +1092,7 @@ function renderAreaStats(a, b) {
   $("areaStats").innerHTML =
     `<b>${state.area ? state.area.label : isWorld() ? "Whole world" : "Whole country"}</b> · ${keys.length.toLocaleString("en-US")} squares with fires<br>` +
     `${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}: ` +
-    `MODIS <b>${fmt(sum[0])}</b> · VIIRS <b>${m[b] < "2012-01" ? "no data" : fmt(sum[1])}</b> · harmonized <b>${fmt(sum[2])}</b>` +
+    `MODIS saw <b>${fmt(sum[0])}</b> · VIIRS saw <b>${m[b] < "2012-01" ? "no data" : fmt(sum[1])}</b> · fair count <b>${fmt(sum[2])}</b>` +
     (state.area ? `<br><span class="small">${isWorld() ? "Every square uses its own country's exchange rates." : `A drawn area uses ${state.c.name}'s exchange rates.`} Squares count if their centre is inside.</span>` : "");
 }
 
@@ -1049,7 +1187,7 @@ function renderFire() {
   const notes = [`Showing ${label} (${days.length} day${days.length === 1 ? "" : "s"}), whole planet.`];
   if (f.viirs && days.length && days[days.length - 1] < VIIRS_FIRST) notes.push("VIIRS starts on 20 Jan 2012, so only MODIS dots here.");
   if (!f.modis && !f.viirs) notes.push("Tick MODIS or VIIRS to see dots.");
-  notes.push("These are NASA's raw dots (not cleaned, so factories show too) and can't be clicked. Squares and the calendar use our cleaned data.");
+  notes.push("These are NASA's own dots: not cleaned (factories show too) and not clickable. The squares and the calendar use our cleaned data.");
   $("fireNote").textContent = notes.join(" ");
 }
 
@@ -1158,11 +1296,11 @@ function renderCalendar() {
   const cal = $("cal");
   cal.innerHTML = parts.join("");
 
-  const modeName = { harmonized: "Harmonized hotspots", modis: "Raw MODIS hotspots", viirs: "Raw VIIRS hotspots", anomaly: "Anomaly vs normal" }[state.calMode];
-  $("calTitle").textContent = `Burning calendar · ${modeName}`;
+  const modeName = { harmonized: "Fair count of fires", modis: "Fires MODIS saw", viirs: "Fires VIIRS saw", anomaly: "Compared to normal" }[state.calMode];
+  $("calTitle").textContent = `Fire calendar · ${modeName}`;
   $("calNote").innerHTML = anomalyMode
     ? `Each month compared with its <b>normal</b> (the median of the same month, ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}). Blue = fewer fires than normal, red = more.`
-    : `The 3 count modes share <b>one colour scale</b>. Raw MODIS looks pale because it misses small fires; harmonized makes old and new years fair to compare. Click a month to show it on the map.`;
+    : `All count views use <b>the same colours</b>. "MODIS saw" looks pale because MODIS misses small fires; the <b>fair count</b> makes old and new years comparable. <b>Click a month</b> to see it on the map.`;
 
   // Legend
   const marks = `<span><span class="mark"></span>satellite gap (part of the month missing)</span>` +
@@ -1174,6 +1312,7 @@ function renderCalendar() {
     ? `<span class="ramp">${DIV.map((c) => `<i style="background:${c}"></i>`).join("")}</span><span>−75% … normal … +100%</span>${marks}`
     : `<span>Fewer</span><span class="ramp">${SEQ.map((c) => `<i style="background:${c}"></i>`).join("")}</span><span>More (up to ${compact(max)})</span>` +
       `<span><span class="s" style="background:var(--r0)"></span>0</span>${marks}`;
+  writeHash();                 // keep the shareable link up to date
 }
 
 // Calendar tooltip + click (one listener for all cells)
@@ -1182,8 +1321,8 @@ function calTip(el) {
   if (i === undefined) return `<div class="tt">${monthLong(m)}</div>No data`;
   const nm = s.normal[+m.slice(5, 7) - 1];
   let html = `<div class="tt">${monthLong(m)}</div>` +
-    `Harmonized: <b>${fmt(s.h[i])}</b><br>MODIS raw: ${fmt(s.modis[i])}<br>VIIRS raw: ${s.viirs[i] === null ? "no data" : fmt(s.viirs[i])}` +
-    `<br>Normal (median): ${nm === null ? "n/a" : fmt(nm)} · ${pct(anomaly(i))}`;
+    `Fair count: <b>${fmt(s.h[i])}</b><br>MODIS saw: ${fmt(s.modis[i])}<br>VIIRS saw: ${s.viirs[i] === null ? "no data" : fmt(s.viirs[i])}` +
+    `<br>Normal for this month: ${nm === null ? "n/a" : fmt(nm)} · ${pct(anomaly(i))}`;
   if (c.partial_months[m]) html += `<br><i>Partial month: ${c.partial_months[m]}</i>`;
   if (c.terra_only_months.includes(m)) html += `<br><i>Terra only: converted with the Terra-only rate</i>`;
   if (m === c.inProgress) {
@@ -1253,10 +1392,10 @@ function renderDay() {
   if (state.area) notes.push(`daily numbers are for the whole ${place}, not only your area`);
   if (c.noaa20Days && c.noaa20Days.has(d)) notes.push("other VIIRS satellite (NOAA-20), adjusted");
   if (c.partial_months[m]) notes.push(c.partial_months[m]);
-  if (c.terra_only_months.includes(m)) notes.push("Terra only: harmonized with the Terra-only rate");
+  if (c.terra_only_months.includes(m)) notes.push("Terra only: converted with the Terra-only rate");
   $("dSub").textContent = notes.join(" · ");
 
-  const rows = [["MODIS raw", daily.modis[i], "var(--modis)"], ["VIIRS raw", daily.viirs[i], "var(--viirs)"], ["Harmonized", daily.harmonized[i], "var(--harm)"]];
+  const rows = [["MODIS saw", daily.modis[i], "var(--modis)"], ["VIIRS saw", daily.viirs[i], "var(--viirs)"], ["Fair count", daily.harmonized[i], "var(--harm)"]];
   const top = Math.max(1, ...rows.map((r) => r[1] || 0));
   $("dStats").innerHTML = rows.map(([name, v, col]) =>
     `<div class="stat-row"><span>${name}</span><span class="bar"><i style="width:${v === null ? 0 : (v / top) * 100}%;background:${col}"></i></span>` +
@@ -1273,8 +1412,9 @@ function renderDay() {
   dayChart.$sel = i - a;
   // From Feb 2012 harmonized = VIIRS, so the two lines lie on top of each other.
   const whole = isWorld() ? "Whole world" : "Whole country";
-  $("dayHint").textContent = dayAt(a) >= "2012-02-01" ? `${whole} · from Feb 2012 harmonized = VIIRS (lines overlap)` : whole;
+  $("dayHint").textContent = dayAt(a) >= "2012-02-01" ? `${whole} · from Feb 2012 the fair count = VIIRS (the lines overlap)` : whole;
   dayChart.update(reduceMotion ? "none" : undefined);
+  writeHash();                 // keep the shareable link up to date
 }
 
 function buildDayChart() {
@@ -1282,9 +1422,9 @@ function buildDayChart() {
     type: "line",
     data: { labels: [], datasets: [
       // 3 different line patterns, so colour is never the only difference
-      { label: "MODIS raw", data: [], borderWidth: 2.5, pointRadius: 0, tension: 0.25, borderDash: [2, 3] },
-      { label: "VIIRS raw", data: [], borderWidth: 3, pointRadius: 0, tension: 0.25, spanGaps: false },
-      { label: "Harmonized", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, borderDash: [7, 4] },
+      { label: "MODIS saw", data: [], borderWidth: 2.5, pointRadius: 0, tension: 0.25, borderDash: [2, 3] },
+      { label: "VIIRS saw", data: [], borderWidth: 3, pointRadius: 0, tension: 0.25, spanGaps: false },
+      { label: "Fair count", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, borderDash: [7, 4] },
     ] },
     options: {
       responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
@@ -1340,6 +1480,7 @@ function renderGibs() {
     gibsUrl = url;
   }
   $("gibsNote").textContent = (g.on && g.date ? `Picture of ${longDate(g.date)}. ` : "") + note;
+  writeHash();                 // keep the shareable link up to date
 }
 
 // ------------------------------------------------------------------ PROOF CHART + THIS MONTH VS NORMAL
@@ -1353,9 +1494,9 @@ function buildProofCharts() {
   proofChart = new Chart($("proofChart"), {
     type: "line",
     data: { labels: [], datasets: [
-      { label: "MODIS raw", data: [], borderWidth: 2, pointRadius: 0, borderDash: [2, 3] },
-      { label: "VIIRS raw", data: [], borderWidth: 3, pointRadius: 0 },
-      { label: "Harmonized MODIS (rate × MODIS)", data: [], borderWidth: 2, pointRadius: 0, borderDash: [7, 4] },
+      { label: "MODIS saw", data: [], borderWidth: 2, pointRadius: 0, borderDash: [2, 3] },
+      { label: "VIIRS saw", data: [], borderWidth: 3, pointRadius: 0 },
+      { label: "MODIS converted (rate × MODIS)", data: [], borderWidth: 2, pointRadius: 0, borderDash: [7, 4] },
     ] },
     options: { ...base, scales: { x: { ticks: { maxTicksLimit: 8, autoSkip: true } }, y: { beginAtZero: true } } },
   });
@@ -1365,7 +1506,7 @@ function buildProofCharts() {
       { type: "line", label: "25%", data: [], pointRadius: 0, borderWidth: 0, fill: false, order: 3 },
       { type: "line", label: "middle 50% of years", data: [], pointRadius: 0, borderWidth: 0, fill: "-1", order: 3 },
       { type: "line", label: "normal (median)", data: [], pointRadius: 0, borderWidth: 2, borderDash: [6, 4], order: 1 },
-      { type: "bar", label: "harmonized hotspots", data: [], borderRadius: 3, order: 2 },
+      { type: "bar", label: "fires (fair count)", data: [], borderRadius: 3, order: 2 },
     ] },
     options: { ...base, interaction: { mode: "index", intersect: false },
       scales: { x: { ticks: { maxTicksLimit: 13 } }, y: { beginAtZero: true } },
@@ -1409,7 +1550,7 @@ function renderProof() {
   const sumV = idx.reduce((t, [, i]) => t + (s.viirs[i] || 0), 0);
   const sumH = ds[2].data.reduce((t, x) => t + x, 0);
   const v = c.validation;
-  let html = `Over 2012–2025, harmonized MODIS adds up to <b>${sumV ? Math.round((sumH / sumV) * 100) : "–"}%</b> of the real VIIRS count ` +
+  let html = `Over 2012–2025, MODIS converted with the exchange rates adds up to <b>${sumV ? Math.round((sumH / sumV) * 100) : "–"}%</b> of what VIIRS really saw ` +
     `(100% = the lines match). It is not exactly 100% because each month's rate is the middle value (median) of its yearly ratios, ` +
     `and middle values do not add up exactly to the total. ` +
     `<b>The fair test hides the answer:</b> rates learned only on 2015–2025 predicted the hidden 2012–2014 VIIRS months ` +
@@ -1456,13 +1597,13 @@ function renderNormal() {
     // Unfinished month: compare with the same days of past years, not full months.
     const sf = soFar(k), an = sf.D > 0 && sf.normal > 0 ? ((sf.value - sf.normal) / sf.normal) * 100 : null;
     $("normalNote").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> (blue bar) is <b>still in progress</b>: ` +
-      `${fmt(sf.value)} harmonized hotspots in its complete days 1–${sf.D}, <b>${an === null ? "no normal" : pct(an)}</b> vs the same days of ` +
+      `${fmt(sf.value)} fires (fair count) in its complete days 1–${sf.D}, <b>${an === null ? "no normal" : pct(an)}</b> vs the same days of ` +
       `${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]} (normal = ${fmt(sf.normal)}). The other bars are full months. Click a bar to pick another year.`;
     return;
   }
   const rank = 1 + vals.filter((x) => x > val).length;
   const an = med > 0 ? ((val - med) / med) * 100 : null;
-  $("normalNote").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> (blue bar): ${fmt(val)} harmonized hotspots, ` +
+  $("normalNote").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> (blue bar): ${fmt(val)} fires (fair count), ` +
     `<b>${an === null ? "no normal to compare" : pct(an) + " vs normal"}</b> (normal = ${fmt(med)}). ` +
     `${ordinal(rank)} highest ${MONTHS_LONG[k - 1]} of ${years.length} years. ` +
     `Half of all years fall inside the green band (${fmt(q25)}–${fmt(q75)}). Click a bar to pick another year.`;
@@ -1493,7 +1634,7 @@ function renderHow() {
   // 2) Exchange-rate table
   const k = state.normalMonth, max = Math.max(...Object.values(c.rates).map((r) => r.rate), 1);
   const r = c.rates[String(k)];
-  $("rateSentence").innerHTML = `In <b>${MONTHS_LONG[k - 1]}</b>, 1 MODIS hotspot = <b>${r.rate} VIIRS hotspots</b> in ${countryName()}. ` +
+  $("rateSentence").innerHTML = `In <b>${MONTHS_LONG[k - 1]}</b>, 1 fire seen by MODIS = <b>${r.rate} fires seen by VIIRS</b> in ${countryName()}. ` +
     `VIIRS sees more because its pixels are smaller (375 m instead of 1 km). We use the median of the years, so one strange year can't move it much.` +
     (c.rate_source === "global" ? ` <b>Few fires here: all months use the world median rate.</b>` : "");
   $("rateBody").innerHTML = MONTHS_LONG.map((name, n) => {
@@ -1523,7 +1664,7 @@ function renderHow() {
   if (c.rate_source === "global") notes.push("it has very few fires, so it uses the world median exchange rate");
   if (avg < 1.5) notes.push(`its exchange rate is unusually low (${avg.toFixed(1)}): MODIS sees hot places here that VIIRS does not count as fires`);
   if (avg > 10) notes.push(`its exchange rate is unusually high (${avg.toFixed(1)}): non-vegetation heat (lava, gas flares) may be left in the data`);
-  if (e !== null && e > 40) notes.push(`the hidden-years test is rough (${e}%), so harmonized years before Feb 2012 are less certain`);
+  if (e !== null && e > 40) notes.push(`the hidden-years test is rough (${e}%), so the converted years before Feb 2012 are less certain`);
   $("countryLimits").hidden = !notes.length;
   $("countryLimits").innerHTML = notes.length ? `<b>Note for ${c.name}:</b> ${notes.join("; ")}.` : "";
 }

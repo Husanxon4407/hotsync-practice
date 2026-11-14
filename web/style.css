@@ -548,6 +548,14 @@ a.ghost-btn { color: var(--ink); text-decoration: none; }
 .chip.updated { border-color: color-mix(in srgb, var(--harm) 45%, var(--line)); }
 .live-dot { background: var(--viirs); box-shadow: 0 0 0 3px color-mix(in srgb, var(--viirs) 30%, transparent); animation: pulse 1.6s ease-in-out infinite; }
 @keyframes pulse { 50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--viirs) 0%, transparent); } }
+/* Plain-language helpers: "What is this?", "How to use", Copy link */
+.hero .what { margin-top: 12px; font-size: 13.5px; color: var(--ink2); background: var(--chip); border: 1px solid var(--line);
+  border-radius: 12px; padding: 10px 12px; max-width: 70ch; }
+.howto { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 12.5px; color: var(--ink2);
+  border-top: 1px dashed var(--line); padding-top: 8px; margin-top: 2px; }
+.howto b { color: var(--ink); }
+.share-btn { font-weight: 600; }
+.share-btn.copied { border-color: var(--harm); color: var(--harm); }
 .row-label { font-size: 12.5px; font-weight: 600; color: var(--ink2); margin: 2px 2px -12px; }
 /* Fire dots: NASA draws all dots orange; the VIIRS layer is turned purple */
 .viirs-dots { filter: hue-rotate(285deg) saturate(1.2); }
