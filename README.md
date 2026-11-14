@@ -20,7 +20,7 @@ HotSync makes MODIS and VIIRS fire hotspot counts fair to compare, for every cou
 
 ```
 python -m venv .venv
-.venv\Scriptsctivate                 # Windows (macOS/Linux: source .venv/bin/activate)
+.venv\Scripts\activate                 # Windows (macOS/Linux: source .venv/bin/activate)
 pip install -r requirements.txt
 python download_firms.py               # ~7 GB of FIRMS zips (folder set in config.py)
 python check_data.py                   # are all 40 zips OK?
