@@ -1,0 +1,65 @@
+# HotSync robot: adds new fires from NASA FIRMS to the current year.
+# Runs on GitHub's computers, so it works even when our laptops are off.
+#
+# Team decision (Stage 6): every 48 hours (the plan said 6 h; 48 h keeps the
+# repository small). To change it, edit the cron line below.
+# Note: GitHub runs scheduled workflows only from the default branch (main),
+# so the schedule starts after Stage 8. Until then: "Run workflow" by hand.
+
+name: Update fire data
+
+on:
+  schedule:
+    - cron: "17 3 */2 * *"          # every 2 days at 03:17 UTC
+  push:                              # test before Stage 8: a push of this file
+    branches: [full-history]         # (or of .github/robot-run) runs the robot once
+    paths: [".github/workflows/update.yml", ".github/robot-run"]
+  workflow_dispatch:                 # "Run workflow" button on GitHub
+    inputs:
+      backfill_from:
+        description: "Leave empty for a normal update (last 3 days). Or a date like 2026-01-01 to refetch from that day."
+        required: false
+        default: ""
+
+permissions:
+  contents: write                    # the robot commits the new data
+
+concurrency:
+  group: update-fire-data            # never two robots at the same time
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120             # a normal update takes ~1-2 min; a backfill longer
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install only what the robot needs
+        run: pip install pandas numpy shapely
+
+      - name: Fetch new fires
+        env:
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+        run: |
+          if [ -n "${{ github.event.inputs.backfill_from }}" ]; then
+            python update_recent.py --backfill "${{ github.event.inputs.backfill_from }}"
+          else
+            python update_recent.py --recent
+          fi
+
+      - name: Commit only if something changed
+        run: |
+          git config user.name "hotsync-robot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/recent_days web/data/recent web/data/live
+          if git diff --cached --quiet; then
+            echo "No new data: nothing to commit."
+          else
+            git commit -m "auto: data update $(date -u '+%Y-%m-%d %H:%M') UTC"
+            git push
+          fi

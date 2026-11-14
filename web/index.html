@@ -76,6 +76,7 @@
     <div class="ctrl">
       <span class="lbl">Area</span>
       <span class="chip" id="areaChip">Whole country</span>
+      <span class="chip updated" id="updatedChip" hidden></span>
       <button class="ghost-btn" id="resetAreaBtn" type="button" hidden>Whole country</button>
     </div>
     <div class="loading" id="loading" role="status" aria-live="polite"></div>
@@ -190,6 +191,12 @@
         </div>
         <button class="play" type="submit">Use this box</button>
       </form>
+
+      <!-- Live fires: last 48 hours, whole world, clickable (robot file) -->
+      <div class="field">
+        <label class="toggle"><input type="checkbox" id="liveToggle"><span class="dot live-dot"></span> Live fires: last 48 h (click a dot)</label>
+        <div class="small" id="liveNote"></div>
+      </div>
 
       <!-- Fire dots for the whole planet, any day since Nov 2000 (NASA GIBS) -->
       <div class="field">

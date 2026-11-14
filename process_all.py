@@ -913,8 +913,10 @@ def run_all(fresh):
         json.dumps(listing, separators=(",", ":")), encoding="utf-8")
     pd.DataFrame(rows).sort_values("country").to_csv(
         config.WEB_DATA_DIR / "rates_summary.csv", index=False)
-    # Static places for the Stage 6 robot (it can't read data_work).
+    # Static places + square sizes for the Stage 6 robot (it can't read data_work).
     pd.concat(statics).to_csv(STATIC_LIST, index=False)
+    (config.REPO_DIR / "data" / "cell_sizes.json").write_text(
+        json.dumps({r["slug"]: r["cell_size"] for r in rows}, separators=(",", ":")))
 
     # 4) Summary printout.
     files = [p for p in config.WEB_DATA_DIR.rglob("*") if p.is_file()]
