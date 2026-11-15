@@ -330,7 +330,7 @@ function enterReport() {
   $("rhMeta").innerHTML = `Made ${made} UTC<br>Data up to ${last}`;
   $("rhLine").innerHTML = `<b>Place:</b> ${c.name} &nbsp;·&nbsp; <b>Area:</b> ${state.area ? state.area.label : isWorld() ? "Whole world" : "Whole country"}` +
     ` &nbsp;·&nbsp; <b>Dates:</b> ${monthShort(state.from)} – ${monthShort(state.to)}`;
-  $("rhLink").textContent = location.href;
+  $("rhLink").textContent = pageURL();
   root.dataset.theme = "light";              // paper is white (not saved as the user's choice)
   // On screen the summary is the head of the map card; on paper it goes on top
   $("where").before($("overview"));
@@ -496,6 +496,18 @@ const okMonth = (x) => /^\d{4}-\d{2}$/.test(x || "");
 const okDay = (x) => /^\d{4}-\d{2}-\d{2}$/.test(x || "");
 let applyingHash = false, lastHash = "";
 
+// The map page can run alone (map.html) or inside the home page (index.html
+// opens it in a full-screen iframe). Then the address people see is the home
+// page's: we keep it in sync, and Share / the report use it.
+const IN_FRAME = window.parent !== window;
+function pageURL() {
+  try {
+    if (IN_FRAME && parent.location.origin === location.origin)
+      return parent.location.origin + parent.location.pathname + "?view=explore" + location.hash;
+  } catch (e) { /* another site framed us: use our own address */ }
+  return location.href;
+}
+
 // Read the link (null when the hash is just a section like #calendar)
 function readHash() {
   const h = decodeURIComponent(location.hash.slice(1));
@@ -534,6 +546,7 @@ function writeHash() {
   const h = "#" + p.toString().replace(/%2C/g, ",").replace(/%3B/g, ";");
   if (h !== location.hash) history.replaceState(null, "", h);
   lastHash = h;
+  if (IN_FRAME) { try { parent.postMessage({ type: "hotsync-hash", hash: h }, location.origin); } catch (e) { /* alone */ } }
 }
 
 // Apply a shared link after its place has loaded
@@ -579,7 +592,7 @@ function applyHash(H) {
 let copyTimer = 0;
 async function copyLink() {
   writeHash();
-  const url = location.href;
+  const url = pageURL();
   let ok = false;
   try {
     // Some browsers ask for permission and wait: give up after 1.5 s.

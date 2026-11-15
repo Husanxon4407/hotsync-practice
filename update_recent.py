@@ -632,6 +632,14 @@ def main():
             say(f"Fetching {len(days)} day(s): {days[0]} .. {days[-1]}")
             update_days(firms, days)
         rebuild()
+        # The home page's small world summary (web/data/home-summary.json).
+        # A problem here must never stop the robot from saving the new fires.
+        try:
+            import home_summary
+            home_summary.build()
+            say("Home page summary updated.")
+        except Exception as err:            # noqa: BLE001
+            say(f"Home page summary NOT updated: {err}")
     if not args.skip_live:
         say("Live layer (last 48 h):")
         update_live(firms)

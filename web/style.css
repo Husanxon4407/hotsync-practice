@@ -1468,3 +1468,4 @@ html.report .map-hint { display: none !important; }
   .map-card > .hero .rate-badge { padding: 5px 12px; font-size: 13px; gap: 7px; }
   .map-card > .hero .rate-badge b { font-size: 14px; }
 }
+.logo-link { display: flex; flex: none; }

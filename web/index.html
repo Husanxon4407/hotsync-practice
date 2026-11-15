@@ -3,536 +3,144 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HotSync · Fair Fire Calendar</title>
-<meta name="description" content="HotSync counts every fire seen from space since 2000 in a fair way, so you can compare any month or year, for any country, area or the whole world.">
+<title>HotSync · Fire on Earth, counted fairly</title>
+<meta name="description" content="HotSync joins two NASA fire satellites (MODIS and VIIRS) into one fair count of fires on Earth since 2001. A short summary first, then a full fire map.">
 <link rel="icon" href="assets/capella-mark.png">
 
-<!-- Set the theme BEFORE the page draws, so it doesn't flash white in dark mode.
-     "auto" = follow the computer's setting. -->
+<!-- Old share links (#c=... or ?view=explore) open the map at once, before
+     the home page draws (no flash of the space hero). home.js does the rest. -->
 <script>
-  try {
-    const t = localStorage.getItem("hotsync-theme");
-    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-  } catch (e) { /* storage blocked: just use auto */ }
+  if (/[?&]view=explore\b/.test(location.search) || location.hash.startsWith("#c=")) {
+    document.documentElement.classList.add("map-open");
+  }
 </script>
 
-<!-- Font + libraries from public CDNs (nothing to install), exact versions.
-     "defer": the page draws first, the libraries run (in this order) after.
-     Leaflet = map, Leaflet-Geoman = drawing on the map, Chart.js = line charts, PapaParse = CSV files. -->
+<!-- Fonts: Manrope (home page) + IBM Plex Mono (big numbers, like the map page) -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600;12..96,700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115q">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<link rel="stylesheet" href="home/home.css?v=20261115h1">
+<link rel="preload" as="image" href="intro/earth.jpg">
+
+<!-- GSAP (the Earth entrance), then our scripts. Three.js is loaded by
+     home/earth.js as a module, only on the home page. Exact versions. -->
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script defer src="home/summary.js?v=20261115h1"></script>
+<script type="module" src="home/home.js?v=20261115h1"></script>
 </head>
-<body>
-<div class="aurora" aria-hidden="true"></div>
+<body class="home-active">
 
-<!-- ============ HEADER ============ -->
-<header class="top load-in">
-  <img class="logo" src="assets/capella-mark.png" alt="Capella logo">
-  <div>
-    <div class="brand"><span class="prism-text">HotSync</span></div>
-    <div class="sub">Every fire since 2000, counted fairly · Team Capella</div>
-  </div>
-  <nav class="sections" aria-label="Sections">
-    <a href="#where">Map</a>
-    <a href="#calendar">Calendar</a>
-    <a href="#keynums">Numbers</a>
-    <a href="#proof">Proof</a>
-    <a href="#day">Day</a>
-    <a href="#numbers">Table</a>
-    <a href="#how">How</a>
-    <a href="#sources">Sources</a>
-  </nav>
-  <button class="icon-btn" id="themeBtn" type="button" aria-label="Change theme"></button>
-</header>
+<div class="earth-page" id="homeRoot">
 
-<!-- Small bar that replaces the picker when it is scrolled away (app.js: setupPickBar) -->
-<div class="pick-bar" id="pickBar" aria-hidden="true">
-  <button type="button" id="pickBarBtn" tabindex="-1" aria-expanded="false" aria-label="Change place or dates">
-    <svg class="pick-flame" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2c1.2 4.3 5.5 6 5.5 11a5.5 5.5 0 0 1-11 0c0-2.2 1-3.8 2.2-5 .3 2.2 1.4 3.3 2.6 3.3C10.6 8.6 10.9 5.4 12 2z"/></svg>
-    <span class="pick-text" id="pickBarText">…</span>
-    <span class="pick-change">Change</span>
-  </button>
+  <!-- ============ 1. HERO: text + 3D Earth ============ -->
+  <section class="earth-hero" id="hero" aria-label="HotSync introduction">
+    <div class="earth-canvas" id="earthCanvas" aria-hidden="true"></div>
+    <div class="earth-fallback" id="earthFallback" aria-hidden="true" hidden></div>
+
+    <header class="earth-header">
+      <a class="wordmark" href="./" aria-label="HotSync home">HotSync<span>.</span></a>
+      <a class="map-btn header-map" href="?view=explore" data-map>Open fire map <span aria-hidden="true">↗</span></a>
+    </header>
+
+    <div class="earth-copy">
+      <h1 class="intro-in">Harmonization<br>of VIIRS and<br>MODIS<br>hot spots.</h1>
+      <p class="intro-in">Two satellite perspectives.<br>One clearer view of fire on Earth.</p>
+      <a class="explore-btn intro-in" href="?view=explore" data-map>Explore the map <span class="arrow" aria-hidden="true">↗</span></a>
+    </div>
+
+    <div class="earth-foot">
+      <div class="sat-label">VIIRS + MODIS <span class="sat-desc">/ Satellite fire observations</span></div>
+      <button type="button" class="scroll-hint" id="scrollHint">Scroll for the summary <span class="bob" aria-hidden="true">↓</span></button>
+      <div class="motion-ctrls">
+        <button type="button" id="replayBtn">Replay entrance</button>
+        <button type="button" id="pauseBtn" aria-pressed="false">Pause motion</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 2. TRANSITION: dark space -> white ============ -->
+  <section class="earth-next" aria-label="Upcoming content"></section>
+
+  <!-- ============ 3. SUMMARY: fire on Earth, in short ============ -->
+  <main class="summary" id="summary" aria-label="Fire on Earth summary">
+    <div class="sum-wrap">
+      <div class="sum-head reveal">
+        <div class="eyebrow">In short</div>
+        <h2>Fire on Earth, 2001 to today</h2>
+        <p class="lead">What two NASA satellites saw, in a few simple numbers.</p>
+      </div>
+
+      <p class="sum-error" id="sumError" hidden>Numbers could not load right now.</p>
+
+      <!-- Block A: 4 big numbers -->
+      <section class="block" id="blockA" aria-label="Four big numbers">
+        <div class="cards4 reveal" id="bigCards">
+          <!-- skeletons until the numbers arrive (same size: no jump) -->
+          <div class="hcard skel"></div><div class="hcard skel"></div><div class="hcard skel"></div><div class="hcard skel"></div>
+        </div>
+        <p class="note small" id="terraNote" hidden>* only one satellite (less certain)</p>
+      </section>
+
+      <!-- Block B: every year since 2001 -->
+      <section class="block reveal" id="blockB" aria-labelledby="yearsTitle">
+        <h3 id="yearsTitle">Every year since 2001</h3>
+        <p class="sub">Fair count of fires on Earth, per year.</p>
+        <div class="year-chart" id="yearChart"><div class="skel chart-skel"></div></div>
+        <a class="text-link" href="?view=explore" data-map>See any country, month by month → open the map</a>
+      </section>
+
+      <!-- Block C: top 5 countries -->
+      <section class="block reveal" id="blockC" aria-labelledby="topTitle">
+        <h3 id="topTitle">Most fires</h3>
+        <ol class="top5" id="top5"><li class="skel top-skel"></li><li class="skel top-skel"></li><li class="skel top-skel"></li><li class="skel top-skel"></li><li class="skel top-skel"></li></ol>
+        <p class="sub small">Click a country to see its full map and calendar.</p>
+      </section>
+
+      <!-- Block D: why "fair count"? -->
+      <section class="block reveal" id="blockD" aria-labelledby="whyTitle">
+        <h3 id="whyTitle">Why "fair count"?</h3>
+        <div class="steps3">
+          <div class="hcard step">
+            <span class="step-num">1</span>
+            <svg class="step-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="8" cy="9" r="3.2"/><circle cx="16.5" cy="15" r="3.2"/><path d="M3 20c2.5-3 5-4 8-4M13 6c3 0 5.5 1 8 4"/></svg>
+            <h4>Two satellites.</h4>
+            <p>MODIS has watched fires since 2000. VIIRS joined in 2012.</p>
+          </div>
+          <div class="hcard step">
+            <span class="step-num">2</span>
+            <svg class="step-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M16 16l5 5M8.5 11h5M11 8.5v5"/></svg>
+            <h4>VIIRS sees more.</h4>
+            <p>Its pixels are smaller, so it sees about <b id="rateTimes">…</b> more fires.</p>
+          </div>
+          <div class="hcard step">
+            <span class="step-num">3</span>
+            <svg class="step-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v16M5 8h14M7 8l-3 6a3 3 0 0 0 6 0zM17 8l-3 6a3 3 0 0 0 6 0z"/></svg>
+            <h4>We make it fair.</h4>
+            <p>We convert the old MODIS counts, so every year from 2001 can be compared.</p>
+          </div>
+        </div>
+        <div class="rate-chip" id="rateChip" hidden>1 MODIS fire ≈ <b id="rateNum">…</b> VIIRS fires</div>
+      </section>
+
+      <!-- Final call to action -->
+      <section class="block cta reveal" aria-labelledby="ctaTitle">
+        <h3 id="ctaTitle">Want the full story?</h3>
+        <p class="sub">Pick any country and dates. See the map, the fire calendar, and every number.</p>
+        <a class="explore-btn dark" href="?view=explore" data-map>Explore the full map <span class="arrow" aria-hidden="true">↗</span></a>
+      </section>
+    </div>
+  </main>
+
+  <footer class="home-foot">
+    <div class="sum-wrap foot-row">
+      <span><b>Data:</b> NASA FIRMS (MODIS + VIIRS)</span>
+      <span id="footUpdated"></span>
+      <span>Made by team Capella · built with help from AI (Claude Code)</span>
+      <a href="?view=explore" data-map>Open the fire map ↗</a>
+    </div>
+  </footer>
 </div>
 
-<main>
-  <div id="error" role="alert"></div>
-
-  <!-- ============ REPORT HEADER: only shown when printing (Stage 7, extra 2) ============ -->
-  <section class="report-only report-head" aria-hidden="true">
-    <div class="rh-top">
-      <img src="assets/capella-mark.png" alt="">
-      <div><div class="rh-brand">HotSync · Fire report</div><div class="rh-sub">Every fire since 2000, counted fairly · Team Capella</div></div>
-      <div class="rh-meta" id="rhMeta"></div>
-    </div>
-    <div class="rh-line" id="rhLine"></div>
-  </section>
-
-  <!-- ============ CONTROL BOX: 3 steps (Place · Dates · Share) drive everything below ============ -->
-  <!-- The slot keeps the picker's height when it opens as a panel (no jump) -->
-  <div class="pick-slot" id="pickSlot">
-  <section class="card controls filters" aria-label="Choose a place and dates, then share">
-    <div class="fsteps">
-      <!-- Step 1: Place (list: js/place-picker.js, globe: js/globe-picker.js) -->
-      <div class="fstep" id="stepPlace" role="group" aria-labelledby="stepPlaceLbl">
-        <div class="fstep-head"><span class="fstep-num" aria-hidden="true">1</span><label class="fstep-lbl" id="stepPlaceLbl" for="countryInput">Place</label></div>
-        <div class="fstep-body">
-          <div class="place-field">
-            <input id="countryInput" autocomplete="off" spellcheck="false"
-                   placeholder="Type a country or World…" aria-describedby="countryHelp">
-            <button type="button" class="globe-btn" id="globeBtn" title="Find on globe" aria-label="Find on globe: pick a country on a 3D globe">
-              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 3.8 5.6 3.8 9s-1.2 6.4-3.8 9M12 3c-2.6 2.6-3.8 5.6-3.8 9s1.2 6.4 3.8 9"/></svg>
-            </button>
-          </div>
-          <span id="countryHelp" class="sr-only">Type to filter the list, use the arrow keys and Enter to pick, or press Find on globe.</span>
-        </div>
-        <div class="fstep-extra">
-          <button type="button" class="area-chip" id="areaChip" hidden title="Remove the area you drew on the map">Custom area <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-        </div>
-      </div>
-      <!-- Step 2: Dates (js/date-picker.js) -->
-      <div class="fstep" id="stepDates" role="group" aria-labelledby="stepDatesLbl">
-        <div class="fstep-head"><span class="fstep-num" aria-hidden="true">2</span><span class="fstep-lbl" id="stepDatesLbl">Dates</span></div>
-        <div class="fstep-body">
-          <button type="button" class="date-btn" id="dateBtn"></button>
-        </div>
-      </div>
-      <!-- Step 3: Share -->
-      <div class="fstep" id="stepShare" role="group" aria-labelledby="stepShareLbl">
-        <div class="fstep-head"><span class="fstep-num" aria-hidden="true">3</span><span class="fstep-lbl" id="stepShareLbl">Share</span></div>
-        <div class="fstep-body share-body">
-          <button type="button" class="share-main" id="shareBtn" title="Copies a link that opens this exact country, dates and area." aria-describedby="sharePreview">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>
-            <span id="shareBtnText">Share this view</span>
-          </button>
-          <button type="button" class="text-btn" id="printBtn" title="Print a one-page fire report of this view, or save it as a PDF">Print report</button>
-        </div>
-        <div class="share-preview" id="sharePreview" aria-live="polite"></div>
-        <div class="share-fallback" id="shareFallback" hidden>
-          <label for="shareUrl">Copy this link by hand:</label>
-          <input id="shareUrl" readonly>
-        </div>
-      </div>
-    </div>
-    <div class="filters-foot">
-      <span class="data-status" id="updatedChip" hidden><span class="status-dot" aria-hidden="true"></span><span id="updatedText"></span></span>
-      <div class="loading" id="loading" role="status" aria-live="polite"></div>
-      <p class="howto">Pick a country and dates. Click a month or draw on the map to look closer. Share sends this exact view.</p>
-    </div>
-  </section>
-  </div>
-
-  <!-- ============ MAP ============ -->
-  <!-- The map uses the full card width. Its buttons sit INSIDE the map, in one
-       bar at the top (what the dots show, Play through time, background,
-       full screen); a small legend sits in the bottom-left corner. -->
-  <section id="where" class="card reveal map-card">
-      <!-- The summary is the head of the map card (for the print report, app.js moves it above the key numbers) -->
-    <div id="overview" class="hero">
-      <div class="hero-main">
-        <h1 id="heroTitle" class="load-in">Loading the fires…</h1>
-        <div class="hero-dates load-in" id="heroRange">…</div>
-        <p id="summary" class="load-in" aria-live="polite"></p>
-        <details class="why load-in">
-          <summary>Why "fair count"?</summary>
-          <p>Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. HotSync converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
-        </details>
-      </div>
-      <!-- The exchange rate as a small badge; the full explanation opens on click -->
-      <div class="rate-wrap load-in">
-        <button type="button" class="rate-badge" id="rateBadge" aria-expanded="false" aria-controls="ratePop"
-                title="The exchange rate: click for more">
-          <span class="ex-ring" aria-hidden="true"></span>
-          <span>1 MODIS fire = <b class="mono" id="exNum">…</b> VIIRS fires</span>
-          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-        </button>
-        <div class="rate-pop" id="ratePop" hidden>
-          <div class="ex-dots" id="exDots" aria-hidden="true"></div>
-          <div class="ex-cap" id="exCap"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="map-wrap" id="mapWrap">
-      <div id="map" role="region" aria-label="Map of fire hotspots"></div>
-
-      <div class="map-top" id="mapTop">
-        <!-- The 3 numbers ARE the buttons: pick what the dots show -->
-        <div class="map-modes" id="modeBtns" role="group" aria-label="What the fire dots show">
-          <button type="button" class="mode-btn" data-key="harmonized" aria-pressed="true" style="--mc:#e0412f">
-            <span class="mb-l">Fair count</span><b class="mb-n" id="mbH">…</b></button>
-          <button type="button" class="mode-btn" data-key="modis" aria-pressed="false" style="--mc:#f16913">
-            <span class="mb-l">MODIS</span><b class="mb-n" id="mbM">…</b></button>
-          <button type="button" class="mode-btn" data-key="viirs" aria-pressed="false" style="--mc:#8c7fd0">
-            <span class="mb-l">VIIRS</span><b class="mb-n" id="mbV">…</b></button>
-        </div>
-        <!-- Time: play the fires year by year (or month by month for short dates) -->
-        <div class="map-time">
-          <button class="play" id="playBtn" type="button" aria-label="Play the fires through time"></button>
-          <input type="range" id="playSlider" min="0" max="1" value="0" aria-label="Time on the map (0 = all chosen dates)">
-          <span class="map-period" id="mapPeriod" aria-live="polite">…</span>
-          <button class="text-btn" id="periodResetBtn" type="button" hidden>All dates</button>
-        </div>
-        <div class="map-right">
-          <div class="map-bg seg" id="bgSeg" role="group" aria-label="Map background"><span class="thumb"></span></div>
-          <button class="map-full-btn" id="fullBtn" type="button" aria-label="Full screen map" aria-pressed="false" title="Full screen map"></button>
-        </div>
-      </div>
-
-      <div class="map-legend" id="mapLegend"></div>
-      <div class="map-msg" id="mapMsg" aria-live="polite"></div>
-    </div>
-    <div class="small area-note" id="areaStats" aria-live="polite"></div>
-
-    <p class="map-hint" id="mapHint">Click a dot for its numbers · draw an area with the tools on the left</p>
-    <details class="map-more">
-      <summary>More map tools</summary>
-      <div class="map-more-grid">
-        <form class="field" id="boxForm" aria-labelledby="boxTitle">
-          <div class="lbl" id="boxTitle">Type a box: its edges in degrees</div>
-          <div class="box-grid">
-            <label>West<input type="number" step="any" id="boxW" required min="-180" max="180"></label>
-            <label>South<input type="number" step="any" id="boxS" required min="-90" max="90"></label>
-            <label>East<input type="number" step="any" id="boxE" required min="-180" max="180"></label>
-            <label>North<input type="number" step="any" id="boxN" required min="-90" max="90"></label>
-          </div>
-          <button class="play" type="submit">Use this box</button>
-        </form>
-
-        <!-- Live fires: last 48 hours, whole world, clickable (robot file) -->
-        <div class="field">
-          <label class="toggle"><input type="checkbox" id="liveToggle"><span class="dot live-dot"></span> Live fires: last 48 h (click a dot)</label>
-          <div class="small" id="liveNote"></div>
-        </div>
-
-        <!-- Fire dots for the whole planet, any day since Nov 2000 (NASA GIBS) -->
-        <div class="field">
-          <label class="toggle"><input type="checkbox" id="fireToggle"><span class="dot" style="background:var(--modis)"></span> NASA fire dots on one day (whole planet)</label>
-          <div class="fire-row">
-            <button class="ghost-btn" id="firePrev" type="button" aria-label="Earlier dots">◀</button>
-            <label class="sr-only" for="fireDate">Date of the fire dots</label>
-            <input type="date" id="fireDate">
-            <button class="ghost-btn" id="fireNext" type="button" aria-label="Later dots">▶</button>
-          </div>
-          <div class="seg" id="fireSpan" role="group" aria-label="How many days of fire dots"><span class="thumb"></span></div>
-          <div class="fire-row">
-            <label class="toggle"><input type="checkbox" id="fireModis" checked><span class="dot" style="background:var(--modis)"></span> MODIS (from Nov 2000)</label>
-            <label class="toggle"><input type="checkbox" id="fireViirs" checked><span class="dot" style="background:var(--viirs)"></span> VIIRS (from 20 Jan 2012)</label>
-          </div>
-          <div class="small" id="fireNote"></div>
-        </div>
-
-        <!-- Satellite picture from NASA GIBS under the dots -->
-        <div class="field">
-          <label class="toggle"><input type="checkbox" id="gibsToggle"><span class="dot" style="background:#b8532f"></span> Satellite picture (NASA GIBS)</label>
-          <div class="gibs-row">
-            <label class="sr-only" for="gibsLayer">Picture type</label>
-            <select id="gibsLayer">
-              <option value="MODIS_Terra_CorrectedReflectance_Bands721">MODIS Terra 7-2-1 (burned land looks reddish)</option>
-              <option value="VIIRS_NOAA20_CorrectedReflectance_TrueColor">VIIRS NOAA-20 true colour (from 2018)</option>
-            </select>
-            <label class="sr-only" for="gibsDate">Picture date</label>
-            <input type="date" id="gibsDate">
-          </div>
-          <div class="small" id="gibsNote">Clicking a month in the calendar sets the picture date to the 15th of that month.</div>
-        </div>
-      </div>
-    </details>
-  </section>
-
-  <!-- ============ FIRE CALENDAR ============ -->
-  <section id="calendar" class="card reveal">
-    <div class="card-head">
-      <div class="sec-title">
-        <h2><span class="num">2</span> <span id="calTitle">Fire calendar</span></h2>
-        <p class="sec-sub">Every month since 2001. Click a month to see it on the map.</p>
-      </div>
-      <div class="seg" id="calSeg" role="group" aria-label="Calendar mode"><span class="thumb"></span></div>
-    </div>
-    <div class="cal-scroll"><div class="cal" id="cal" role="grid" aria-label="Fire calendar: years by months"></div></div>
-    <div class="scale" id="scale"></div>
-    <details class="more">
-      <summary><span class="more-sum" id="calSum"></span><span class="more-btn">More</span></summary>
-      <div class="more-body" id="calNote"></div>
-    </details>
-  </section>
-
-  <!-- ============ KEY NUMBERS (the 8 cards, under the calendar) ============ -->
-  <section id="keynums" class="keynums" aria-labelledby="keyTitle">
-    <div class="sec-head">
-      <div class="sec-title">
-        <h2 id="keyTitle"><span class="num" aria-hidden="true">★</span> Key numbers</h2>
-        <p class="sec-sub">For your place and dates.</p>
-      </div>
-    </div>
-    <div class="kpis" aria-label="Main numbers">
-      <div class="card kpi reveal" style="--c:var(--ember)">
-        <div class="t">Fires (fair count) <button class="q" type="button" data-tip="All fires in your place and dates, counted the same way for every year.">?</button></div>
-        <div class="n" id="kTotal">…</div><div class="s" id="kTotalS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--r4)">
-        <div class="t">Busiest month <button class="q" type="button" data-tip="The month with the most fires on average. Unfinished months are left out.">?</button></div>
-        <div class="n" id="kBusy">…</div><div class="s" id="kBusyS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--r3)">
-        <div class="t">Top 3 years <button class="q" type="button" data-tip="The 3 full years with the most fires. * = Terra only (before July 2002), least certain.">?</button></div>
-        <div class="n small-n" id="kTop">…</div><div class="s" id="kTopS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--r5)">
-        <div class="t">Last month vs normal <button class="q" type="button" data-tip="The last month of your dates vs the middle value of the same month in 2001–2025.">?</button></div>
-        <div class="n" id="kLatest">…</div><div class="s" id="kLatestS"></div>
-      </div>
-    </div>
-
-    <div class="row-label">What the satellites counted</div>
-    <div class="kpis" aria-label="What the satellites counted">
-      <div class="card kpi reveal" style="--c:var(--modis)">
-        <div class="t">Fires MODIS saw <button class="q" type="button" data-tip="The older camera (since 2000). Big pixels (1 km), so it misses small fires.">?</button></div>
-        <div class="n" id="kModis">…</div><div class="s" id="kModisS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--viirs)">
-        <div class="t">Fires VIIRS saw <button class="q" type="button" data-tip="The newer camera (since 20 Jan 2012). Small pixels (375 m), so it sees more small fires.">?</button></div>
-        <div class="n" id="kViirs">…</div><div class="s" id="kViirsS"></div>
-      </div>
-      <div class="card kpi clickable reveal" id="kBusyDayCard" role="button" tabindex="0" style="--c:var(--r4)" title="Click to open this day">
-        <div class="t">Busiest day <button class="q" type="button" data-tip="The day with the most fires in your dates. Click the card to open it.">?</button></div>
-        <div class="n small-n" id="kBusyDay">…</div><div class="s" id="kBusyDayS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--harm)">
-        <div class="t">Fire strength <button class="q" type="button" data-tip="Average heat per detection (fire radiative power, in megawatts).">?</button></div>
-        <div class="n" id="kFrp">…</div><div class="s" id="kFrpS"></div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ PROOF + THIS MONTH VS NORMAL ============ -->
-  <section id="proof" class="grid-2 even">
-    <div class="card reveal">
-      <div class="card-head">
-        <div class="sec-title">
-          <h2><span class="num">3</span> Proof: does the exchange rate work?</h2>
-          <p class="sec-sub">2012–2025, when both satellites flew.</p>
-        </div>
-      </div>
-      <div class="chartbox"><canvas id="proofChart" role="img" aria-label="Line chart, 2012 to 2025: fires MODIS saw, fires VIIRS saw, and MODIS converted with the exchange rate. The converted line follows the VIIRS line."></canvas></div>
-      <div class="legend">
-        <span class="key"><span class="line-key dotted" style="--k:var(--modis)"></span> MODIS saw</span>
-        <span class="key"><span class="line-key" style="background:var(--viirs);height:3px"></span> VIIRS saw</span>
-        <span class="key"><span class="dash"></span> MODIS converted (rate × MODIS)</span>
-      </div>
-      <details class="more">
-        <summary><span class="more-sum" id="proofSum"></span><span class="more-btn">More</span></summary>
-        <div class="more-body" id="proofNote"></div>
-      </details>
-    </div>
-    <div class="card reveal">
-      <div class="card-head">
-        <div class="sec-title">
-          <h2><span class="num">4</span> This month vs normal</h2>
-          <p class="sec-sub">One month in every year. Click a bar to pick a year.</p>
-        </div>
-        <div class="ctrl">
-          <label class="lbl" for="normalMonth">Month</label>
-          <select id="normalMonth"></select>
-        </div>
-      </div>
-      <div class="chartbox"><canvas id="normalChart" role="img" aria-label="Bar chart: fires (fair count) of the chosen month in every year, with the normal line and the band where half of all years fall"></canvas></div>
-      <div class="legend">
-        <span class="key"><span class="sw" style="background:var(--line-strong)"></span> each year</span>
-        <span class="key"><span class="sw" style="background:var(--brand-solid)"></span> chosen year</span>
-        <span class="key"><span class="dash" style="border-color:var(--ink)"></span> normal (middle value of 2001–2025)</span>
-        <span class="key"><span class="sw" style="background:color-mix(in srgb, var(--harm) 25%, transparent)"></span> half of all years fall in this band</span>
-      </div>
-      <details class="more">
-        <summary><span class="more-sum" id="normalSum"></span><span class="more-btn">More</span></summary>
-        <div class="more-body" id="normalNote"></div>
-      </details>
-    </div>
-  </section>
-
-  <!-- ============ DAY VIEW ============ -->
-  <section id="day" class="grid-2 even">
-    <div class="card reveal day-card" aria-live="polite">
-      <div class="card-head" style="margin-bottom:0">
-        <div class="sec-title">
-          <h2><span class="num">5</span> One day</h2>
-          <p class="sec-sub">Fires on a single day.</p>
-        </div>
-        <div class="ctrl">
-          <button class="ghost-btn" id="dayPrev" type="button" aria-label="Previous day">◀</button>
-          <label class="sr-only" for="dayInput">Day</label>
-          <input type="date" id="dayInput">
-          <button class="ghost-btn" id="dayNext" type="button" aria-label="Next day">▶</button>
-        </div>
-      </div>
-      <div class="day-title" id="dTitle">…</div>
-      <div class="day-sub" id="dSub"></div>
-      <div class="stat-rows" id="dStats"></div>
-      <button class="ghost-btn" id="dayDotsBtn" type="button">Show this day's fire dots on the map</button>
-    </div>
-    <div class="card reveal">
-      <div class="card-head"><h2>30 days around it</h2><span class="hint" id="dayHint">Whole country</span></div>
-      <div class="chartbox small-chart"><canvas id="dayChart" role="img" aria-label="Line chart of daily fires for 30 days"></canvas></div>
-      <div class="legend">
-        <span class="key"><span class="line-key dotted" style="--k:var(--modis)"></span> MODIS saw</span>
-        <span class="key"><span class="line-key" style="background:var(--viirs);height:3px"></span> VIIRS saw</span>
-        <span class="key"><span class="dash"></span> Fair count</span>
-      </div>
-    </div>
-  </section>
-
-  <!-- ============ TABLE + DOWNLOADS ============ -->
-  <section id="numbers" class="card reveal">
-    <div class="card-head">
-      <div class="sec-title">
-        <h2><span class="num">6</span> Monthly numbers</h2>
-        <p class="sec-sub">Every month of your selection, ready to download.</p>
-      </div>
-      <div class="ctrl">
-        <button class="play" id="dlMonthly" type="button">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
-          Download table (CSV)
-        </button>
-        <a class="ghost-btn" id="firmsLink" href="https://firms.modaps.eosdis.nasa.gov/download/" target="_blank" rel="noopener">Every single fire dot: NASA FIRMS download ↗</a>
-      </div>
-    </div>
-    <div class="tablewrap">
-      <table>
-        <thead><tr><th scope="col">Month</th><th class="num" scope="col">MODIS saw</th><th class="num" scope="col">VIIRS saw</th><th class="num" scope="col">Fair count</th><th class="num" scope="col">vs normal</th></tr></thead>
-        <tbody id="tbody"></tbody>
-      </table>
-    </div>
-  </section>
-
-  <!-- ============ HOW IT WORKS ============ -->
-  <section id="how" class="card acc reveal">
-    <details>
-    <summary class="acc-head"><span class="acc-title"><h2>How HotSync works</h2><span class="sec-sub" id="howCountry"></span></span><span class="acc-icon" aria-hidden="true"></span></summary>
-    <div class="steps">
-      <div class="step" style="--c:var(--modis)">
-        <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg></div>
-        <b>1. Load</b>Read 25 years of MODIS and 14 years of VIIRS fire data from NASA FIRMS
-      </div>
-      <div class="step" style="--c:#9b6cff">
-        <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 5h16l-6 8v6l-4-2v-4z"/></svg></div>
-        <b>2. Clean</b>Keep vegetation fires, remove low confidence and "always hot" places (factories, gas flares)
-      </div>
-      <div class="step" style="--c:var(--harm)">
-        <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v16M5 8h14M7 8l-3 6a3 3 0 0 0 6 0zM17 8l-3 6a3 3 0 0 0 6 0z"/></svg></div>
-        <b>3. Make fair</b>Learn how many more fires VIIRS sees than MODIS in each month (the "exchange rate", 2012–2025), then convert the years when only MODIS existed
-      </div>
-      <div class="step" style="--c:var(--viirs)">
-        <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></div>
-        <b>4. Show</b>Map, fire calendar, now vs normal, one-day view and downloads
-      </div>
-    </div>
-
-    <div class="how-grid">
-      <div>
-        <h3>Cleaning: only real fires stay</h3>
-        <div class="funnel" id="funnel"></div>
-      </div>
-      <div>
-        <h3>The exchange rate, month by month</h3>
-        <p class="small" id="rateSentence"></p>
-        <div class="tablewrap rate-wrap">
-          <table class="rate-table">
-            <thead><tr><th scope="col">Month</th><th scope="col">1 MODIS = … VIIRS</th><th class="num" scope="col">Middle 50%</th><th class="num" scope="col">Years</th><th class="num" scope="col">Terra only</th></tr></thead>
-            <tbody id="rateBody"></tbody>
-          </table>
-        </div>
-      </div>
-      <div>
-        <h3>The "hide the answer" test</h3>
-        <div id="validBox"></div>
-      </div>
-    </div>
-    </details>
-  </section>
-
-  <!-- ============ LIMITS ============ -->
-  <section id="limits" class="card acc reveal">
-    <details>
-    <summary class="acc-head"><span class="acc-title"><h2>Limits</h2><span class="sec-sub">What HotSync can't tell you.</span></span><span class="acc-icon" aria-hidden="true"></span></summary>
-    <ul class="limits">
-      <li><b>No morning VIIRS pass.</b> MODIS flies over at about 10:30 (Terra) and 13:30 (Aqua), VIIRS only at about 13:30 (and at night). Fires that burn only in the morning are seen by MODIS but not by VIIRS. The exchange rate learns this on average, but not for every single day.</li>
-      <li><b>Clouds and smoke hide fires.</b> No satellite sees a fire under thick clouds or smoke, so a cloudy month can look quiet.</li>
-      <li><b>Small areas are noisy.</b> A drawn area with only a few fires per month gives jumpy numbers. A drawn area uses its country's exchange rates (on the World view, every square uses its own country's rates).</li>
-      <li><b>Counting fires is not the same as measuring burned land.</b> One big fire can show up as many fire dots, and many small fires as only a few. Fire strength (FRP) helps, but it is not hectares burned.</li>
-      <li><b>Recent months use near-real-time data</b>, which is checked less than the final archive data.</li>
-      <li><b>Before July 2002 only one MODIS satellite (Terra) existed.</b> Those months use a separate "Terra-only" exchange rate. This is the least certain part of the history.</li>
-      <li><b>Some places are not vegetation fires</b> even after cleaning: lava from volcanoes (Iceland, 2014 eruption), gas flares that are left in oil countries (Libya), or hot ground that MODIS sees but VIIRS does not (Djibouti, exchange rate 0). Countries with very few fires use the world median rate.</li>
-      <li><b>Daily numbers are for the whole country (or the whole world)</b>, and the map squares are 0.1° (about 11 km), or 0.25° in very large countries (2° on the world view).</li>
-      <li><b>MODIS satellites are old and their orbits have drifted.</b> Since about 2023 MODIS sees fewer fires than before. This does not change the fair count after 2012 (it is what VIIRS saw), but "MODIS saw" looks low in recent years.</li>
-      <li><b>Some 2026 days use the other VIIRS satellite (NOAA-20)</b>, when Suomi NPP sent no data or only part of a day (and after Suomi NPP stopped on 2 Nov 2026). Those days are adjusted to the Suomi NPP scale with a factor learned on days when both satellites flew. They are marked in the calendar and the day view.</li>
-      <li><b>The fire dots on the map are NASA's own detections</b>, drawn by NASA GIBS: they are not cleaned (factories and gas flares show too) and can't be clicked. All counts, the calendar and the downloads use our cleaned data.</li>
-    </ul>
-    <div class="note-box" id="countryLimits" hidden></div>
-    </details>
-  </section>
-
-  <!-- ============ DATA & SOURCES ============ -->
-  <section id="sources" class="card acc reveal">
-    <details>
-    <summary class="acc-head"><span class="acc-title"><h2>Data &amp; Sources</h2><span class="sec-sub">NASA FIRMS, NASA GIBS, Natural Earth and the tools we used.</span></span><span class="acc-icon" aria-hidden="true"></span></summary>
-    <div class="sources">
-      <div>
-        <h3>Data</h3>
-        <ul>
-          <li><a href="https://www.earthdata.nasa.gov/data/tools/firms" target="_blank" rel="noopener">NASA FIRMS</a>: MODIS Collection 6.1 and VIIRS S-NPP 375 m active fire hotspots (yearly country files, 2000–2025)</li>
-          <li><a href="https://firms.modaps.eosdis.nasa.gov/download/" target="_blank" rel="noopener">FIRMS Archive Download</a>: every single fire dot, for any area and dates</li>
-          <li><a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>: satellite pictures (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour) and the daily fire-dot layers for the whole planet (MODIS and VIIRS Thermal Anomalies)</li>
-          <li><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>: country borders (1:50m), used when processing</li>
-          <li>Map background: NASA Blue Marble from <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>; street map and place names data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></li>
-        </ul>
-      </div>
-      <div>
-        <h3>Tools</h3>
-        <ul>
-          <li>Website: <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> 1.9.4, <a href="https://github.com/geoman-io/leaflet-geoman" target="_blank" rel="noopener">Leaflet-Geoman</a> 2.17.0, <a href="https://www.chartjs.org/" target="_blank" rel="noopener">Chart.js</a> 4.4.1, <a href="https://www.papaparse.com/" target="_blank" rel="noopener">PapaParse</a> 5.4.1, fonts <a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener">Inter</a>, <a href="https://fonts.google.com/specimen/Bricolage+Grotesque" target="_blank" rel="noopener">Bricolage Grotesque</a>, <a href="https://fonts.google.com/specimen/IBM+Plex+Mono" target="_blank" rel="noopener">IBM Plex Mono</a></li>
-          <li>3D globe ("Find on globe", loaded only when opened): <a href="https://github.com/vasturiano/globe.gl" target="_blank" rel="noopener">globe.gl</a> 2.32.4; earth picture: NASA Blue Marble (from the <a href="https://github.com/vasturiano/three-globe" target="_blank" rel="noopener">three-globe</a> examples); borders: Natural Earth, the same file we use for processing</li>
-          <li>Processing: Python with <a href="https://pandas.pydata.org/" target="_blank" rel="noopener">pandas</a>, <a href="https://numpy.org/" target="_blank" rel="noopener">NumPy</a>, <a href="https://arrow.apache.org/docs/python/" target="_blank" rel="noopener">PyArrow</a>, <a href="https://shapely.readthedocs.io/" target="_blank" rel="noopener">Shapely</a>, <a href="https://matplotlib.org/" target="_blank" rel="noopener">Matplotlib</a></li>
-          <li>Colour ramps: <a href="https://colorbrewer2.org/" target="_blank" rel="noopener">ColorBrewer</a> (YlOrRd, RdBu), colour-blind friendly</li>
-          <li>Code written with help from AI (Claude Code). The idea and the method choices are the team's.</li>
-        </ul>
-      </div>
-    </div>
-    <p class="ack">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).</p>
-    </details>
-  </section>
-  <!-- ============ REPORT FOOTER: sources, only shown when printing ============ -->
-  <section class="report-only report-foot" aria-hidden="true">
-    <p><b>How to read it.</b> Two NASA satellite cameras count fires: MODIS (since 2000) and VIIRS (since 2012, sees about 4 times more).
-      The <b>fair count</b> uses VIIRS from February 2012 and, before that, MODIS × the place's monthly "exchange rate" (VIIRS ÷ MODIS, learned on 2015–2025).
-      Numbers are satellite hotspots (fire detections), not separate fires or burned area.</p>
-    <p><b>Data.</b> NASA FIRMS: MODIS Collection 6.1 and VIIRS S-NPP 375 m active fire hotspots (yearly country files 2000–2025, FIRMS API for the current year);
-      country borders: Natural Earth; map: © OpenStreetMap contributors. Made with HotSync (NASA Space Apps 2026, Team Capella).</p>
-    <p class="ack">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).</p>
-    <p class="rh-link">Open this exact view: <span id="rhLink"></span></p>
-  </section>
-</main>
-
-<footer>
-  <span>Data: <a href="https://www.earthdata.nasa.gov/data/tools/firms" target="_blank" rel="noopener">NASA FIRMS</a> · Map: © OpenStreetMap contributors · NASA Space Apps 2026</span>
-  <span>Team Capella · built with help from AI (Claude Code)</span>
-</footer>
-
-<div class="tip" id="tip" role="tooltip"></div>
-<div class="toast" id="toast" role="status"></div>
-
-<!-- ?v=... makes browsers load the new file after every update (change it each time) -->
-<!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115q"></script>
-<script defer src="js/place-picker.js?v=20261115q"></script>
-<script defer src="js/globe-picker.js?v=20261115q"></script>
-<script defer src="js/date-picker.js?v=20261115q"></script>
-<script defer src="app.js?v=20261115q"></script>
+<div class="htip" id="htip" role="tooltip" hidden></div>
 </body>
 </html>

@@ -90,7 +90,9 @@ https://firms.modaps.eosdis.nasa.gov/api/map_key/). On GitHub the same key is th
 | `update_recent.py` | the robot: current year, NOAA-20 factor, live layer |
 | `check_all_countries.py` | checks every country file |
 | `.github/workflows/update.yml` | runs the robot every 2 days |
-| `web/` | the website (`index.html`, `app.js`, `style.css`, `data/`) |
+| `web/` | the website: `index.html` = home page (3D Earth + world summary, `home/`, `intro/`), `map.html` = the fire map (`app.js`, `style.css`), `data/` |
+| `home_summary.py` | writes `web/data/home-summary.json` (the home page's world numbers, same rules as the map; the robot runs it) |
+| `make_intro_images.py` | made the home page's Earth pictures (`web/intro/`) from the NASA Blue Marble picture |
 | `web/js/` | the control box helpers: `place-search.js` (name search + short names like USA, UK), `place-picker.js` (place list), `globe-picker.js` (3D globe), `date-picker.js` (dates pop-up) |
 | `web/data/globe_countries.json` | light borders for the globe, made by `python countries.py --globe` |
 | `web/data/country/` | two files per place: `<slug>.json` (small, opens the page at once) and `<slug>.cells.gz` (all map squares month by month, packed; loads in the background) |

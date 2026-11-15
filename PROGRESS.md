@@ -221,3 +221,16 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   (dates next to the title, "Why fair count?" next to the sentence); map hint moved under the map. Print report
   moves the summary back on top. Phones: compact picker (Place full row, Dates + Share side by side).
   First screen shows 59% of the map on a 1536x730 laptop, 45% on a 375x740 phone.
+
+---
+## 2026-11-15 · New home page (HOMEPAGE.md, asked by the user)
+- web/index.html = new home page: space hero with a 3D Earth (Three.js 0.160.0, GSAP 3.12.5 entrance 7.5 s,
+  Replay / Pause / Esc, static picture if WebGL fails), dark-to-white transition, summary "Fire on Earth, in short"
+  (4 big numbers, year chart, top 5 countries of the last full year, why fair count + world rate), footer.
+- The old page moved to web/map.html; the home page opens it in a full-screen iframe (?view=explore).
+  Old share links (#c=...) open the map at once; Back returns home; the visible address follows the map view,
+  and Share / the report use it. Root index.html keeps ?view and #c when it forwards to web/.
+- Numbers: home_summary.py writes web/data/home-summary.json with the map page's rules (checked: 449.3M,
+  August, 2001*, rate 4.3 = the World view). The robot runs it after each update (update.yml adds the file).
+- Earth pictures (user choice): NASA Blue Marble from three-globe@2.31.1 -> web/intro/earth.jpg; normal map
+  made from its height map (make_intro_images.py).
