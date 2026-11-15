@@ -28,7 +28,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115p">
+<link rel="stylesheet" href="style.css?v=20261115q">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -41,7 +41,6 @@
     <div class="sub">Every fire since 2000, counted fairly · Team Capella</div>
   </div>
   <nav class="sections" aria-label="Sections">
-    <a href="#overview">Overview</a>
     <a href="#where">Map</a>
     <a href="#calendar">Calendar</a>
     <a href="#keynums">Numbers</a>
@@ -130,41 +129,34 @@
   </section>
   </div>
 
-  <!-- ============ SUMMARY: short title, dates, one sentence ============ -->
-  <section id="overview" class="hero">
-    <div class="hero-main">
-      <h1 id="heroTitle" class="load-in">Loading the fires…</h1>
-      <div class="hero-dates load-in" id="heroRange">…</div>
-      <p id="summary" class="load-in" aria-live="polite"></p>
-      <details class="why load-in">
-        <summary>Why "fair count"?</summary>
-        <p>Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. HotSync converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
-      </details>
-    </div>
-    <!-- The exchange rate as a small badge; the full explanation opens on click -->
-    <div class="rate-wrap load-in">
-      <button type="button" class="rate-badge" id="rateBadge" aria-expanded="false" aria-controls="ratePop"
-              title="The exchange rate: click for more">
-        <span class="ex-ring" aria-hidden="true"></span>
-        <span>1 MODIS fire = <b class="mono" id="exNum">…</b> VIIRS fires</span>
-        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
-      </button>
-      <div class="rate-pop" id="ratePop" hidden>
-        <div class="ex-dots" id="exDots" aria-hidden="true"></div>
-        <div class="ex-cap" id="exCap"></div>
-      </div>
-    </div>
-  </section>
-
   <!-- ============ MAP ============ -->
   <!-- The map uses the full card width. Its buttons sit INSIDE the map, in one
        bar at the top (what the dots show, Play through time, background,
        full screen); a small legend sits in the bottom-left corner. -->
   <section id="where" class="card reveal map-card">
-    <div class="card-head">
-      <div class="sec-title">
-        <h2><span class="num">1</span> Where the fires were</h2>
-        <p class="sec-sub" id="mapHint">The main hotspots. Click a dot for its numbers, or draw an area with the tools on the left.</p>
+      <!-- The summary is the head of the map card (for the print report, app.js moves it above the key numbers) -->
+    <div id="overview" class="hero">
+      <div class="hero-main">
+        <h1 id="heroTitle" class="load-in">Loading the fires…</h1>
+        <div class="hero-dates load-in" id="heroRange">…</div>
+        <p id="summary" class="load-in" aria-live="polite"></p>
+        <details class="why load-in">
+          <summary>Why "fair count"?</summary>
+          <p>Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. HotSync converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
+        </details>
+      </div>
+      <!-- The exchange rate as a small badge; the full explanation opens on click -->
+      <div class="rate-wrap load-in">
+        <button type="button" class="rate-badge" id="rateBadge" aria-expanded="false" aria-controls="ratePop"
+                title="The exchange rate: click for more">
+          <span class="ex-ring" aria-hidden="true"></span>
+          <span>1 MODIS fire = <b class="mono" id="exNum">…</b> VIIRS fires</span>
+          <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+        </button>
+        <div class="rate-pop" id="ratePop" hidden>
+          <div class="ex-dots" id="exDots" aria-hidden="true"></div>
+          <div class="ex-cap" id="exCap"></div>
+        </div>
       </div>
     </div>
 
@@ -199,6 +191,7 @@
     </div>
     <div class="small area-note" id="areaStats" aria-live="polite"></div>
 
+    <p class="map-hint" id="mapHint">Click a dot for its numbers · draw an area with the tools on the left</p>
     <details class="map-more">
       <summary>More map tools</summary>
       <div class="map-more-grid">
@@ -536,10 +529,10 @@
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
 <!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115p"></script>
-<script defer src="js/place-picker.js?v=20261115p"></script>
-<script defer src="js/globe-picker.js?v=20261115p"></script>
-<script defer src="js/date-picker.js?v=20261115p"></script>
-<script defer src="app.js?v=20261115p"></script>
+<script defer src="js/place-search.js?v=20261115q"></script>
+<script defer src="js/place-picker.js?v=20261115q"></script>
+<script defer src="js/globe-picker.js?v=20261115q"></script>
+<script defer src="js/date-picker.js?v=20261115q"></script>
+<script defer src="app.js?v=20261115q"></script>
 </body>
 </html>

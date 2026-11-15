@@ -1416,3 +1416,55 @@ html.report .pick-bar, html.report .pick-slot { display: none !important; }
   .pick-bar { display: none !important; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ================================================================
+   SUMMARY INSIDE THE MAP CARD: title + sentence + rate badge are the
+   head of the map card, compact, so at least half of the map is on the
+   first screen.
+   ================================================================ */
+.map-card > .hero { padding: 0 0 var(--space-4); gap: var(--space-2) var(--space-5); }
+.map-card > .hero h1 { font-size: clamp(24px, 2.6vw, 34px); }
+.map-card > .hero .hero-dates { margin-top: 4px; font-size: 13px; }
+.map-card > .hero #summary { margin-top: var(--space-2); font-size: 15.5px; }
+.map-card > .hero .why { margin-top: 2px; }
+.map-card > .hero .rate-wrap { padding-top: 4px; }
+.map-hint { float: right; margin: 10px 0 0 var(--space-4); font-size: 12.5px; color: var(--muted); }
+@media (max-width: 640px) {
+  .map-hint { float: none; margin: 8px 0 0; }
+}
+html.report .map-hint { display: none !important; }
+/* tighter: dates next to the title, "Why fair count?" next to the sentence */
+.map-card { padding-top: 20px; }
+.map-card > .hero { padding-bottom: var(--space-3); }
+.map-card > .hero .hero-main { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 14px; }
+.map-card > .hero .hero-main::before { content: ""; order: 2; flex-basis: 100%; height: 0; }   /* line break */
+.map-card > .hero h1 { order: 0; }
+.map-card > .hero .hero-dates { order: 1; margin-top: 0; }
+.map-card > .hero #summary { order: 3; margin-top: 6px; }
+.map-card > .hero .why { order: 4; margin-top: 6px; }
+.map-card > .hero .why[open] { flex-basis: 100%; }
+.controls.filters { padding-bottom: 8px; }
+.filters-foot { margin-top: 6px; }
+/* phones: a compact picker, so the map starts on the first screen
+   (the help line and the link preview are hidden there; Share still works) */
+@media (max-width: 640px) {
+  .controls.filters { padding: 10px 10px 8px; }
+  .fsteps { gap: 6px; }
+  .fstep { padding: 6px 10px 8px; }
+  .fstep-head { margin-bottom: 4px; }
+  #stepPlace { grid-column: 1 / -1; }
+  .fsteps { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  #stepShare .fstep-head, .filters .howto, .share-preview { display: none; }
+  #stepShare .share-body { height: 100%; align-items: center; flex-wrap: wrap; gap: 4px 10px; }
+  #stepShare .share-main { width: 100%; justify-content: center; }
+  .map-card { padding: 14px; }
+  .map-card > .hero h1 { font-size: 24px; }
+  .map-card > .hero #summary { font-size: 14.5px; }
+}
+@media (max-width: 640px) {
+  .map-card > .hero { gap: 6px; padding-bottom: 10px; }
+  .map-card > .hero h1 { font-size: 22px; }
+  .map-card > .hero .rate-wrap { padding-top: 0; }
+  .map-card > .hero .rate-badge { padding: 5px 12px; font-size: 13px; gap: 7px; }
+  .map-card > .hero .rate-badge b { font-size: 14px; }
+}

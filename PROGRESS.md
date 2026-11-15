@@ -217,3 +217,7 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   picker as a panel (click outside / Esc closes, closes after a pick); its slot keeps the height (no jump).
   Print: no bar, no animation. Tested: US, Brazil, India, Mexico, Chile, Kenya, World, date quick button, shared link,
   print report, 504 px + 1280 px, no console errors.
+- Update (user): the summary (title, dates, sentence, rate badge) is now the head of the map card, compact
+  (dates next to the title, "Why fair count?" next to the sentence); map hint moved under the map. Print report
+  moves the summary back on top. Phones: compact picker (Place full row, Dates + Share side by side).
+  First screen shows 59% of the map on a 1536x730 laptop, 45% on a 375x740 phone.

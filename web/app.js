@@ -332,6 +332,8 @@ function enterReport() {
     ` &nbsp;·&nbsp; <b>Dates:</b> ${monthShort(state.from)} – ${monthShort(state.to)}`;
   $("rhLink").textContent = location.href;
   root.dataset.theme = "light";              // paper is white (not saved as the user's choice)
+  // On screen the summary is the head of the map card; on paper it goes on top
+  $("where").before($("overview"));
   root.classList.add("report");
   map.invalidateSize();                      // the map box changed size
   map.options.zoomSnap = 0;                  // any zoom, so the place fills the small map
@@ -346,8 +348,9 @@ function exitReport() {
   const s = reportSaved, root = document.documentElement;
   reportSaved = null;
   root.classList.remove("report");
+  $("where").prepend($("overview"));          // the summary back into the map card
   if (s.theme) root.dataset.theme = s.theme; else delete root.dataset.theme;
-  map.options.zoomSnap = 0.5;
+  map.options.zoomSnap = 0.25;
   map.invalidateSize();
   map.setView(s.center, s.zoom, { animate: false });   // back to the user's own view
   recolor();
