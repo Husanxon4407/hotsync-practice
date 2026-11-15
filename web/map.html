@@ -7,13 +7,16 @@
 <meta name="description" content="PyroVision counts every fire seen from space since 2000 in a fair way, so you can compare any month or year, for any country, area or the whole world.">
 <link rel="icon" href="assets/capella-mark.png">
 
-<!-- Set the theme BEFORE the page draws, so it doesn't flash white in dark mode.
-     "auto" = follow the computer's setting. -->
+<!-- Set the theme BEFORE the page draws, so it doesn't flash white.
+     The site opens in DARK mode; the theme button's choice is remembered
+     ("pyro-theme": light / dark / auto = follow the computer). -->
 <script>
+  document.documentElement.dataset.theme = "dark";
   try {
-    const t = localStorage.getItem("hotsync-theme");
-    if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
-  } catch (e) { /* storage blocked: just use auto */ }
+    const t = localStorage.getItem("pyro-theme");
+    if (t === "light") document.documentElement.dataset.theme = "light";
+    else if (t === "auto") delete document.documentElement.dataset.theme;
+  } catch (e) { /* storage blocked: dark */ }
 </script>
 
 <!-- Font + libraries from public CDNs (nothing to install), exact versions.
@@ -28,7 +31,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115w">
+<link rel="stylesheet" href="style.css?v=20261116a">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -274,27 +277,12 @@
         <p class="sec-sub">For your place and dates.</p>
       </div>
     </div>
-    <div class="kpis" aria-label="Main numbers">
+    <div class="row-label">What the satellites counted</div>
+    <div class="kpis" aria-label="What the satellites counted">
       <div class="card kpi reveal" style="--c:var(--ember)">
         <div class="t">Fires (fair count) <button class="q" type="button" data-tip="All fires in your place and dates, counted the same way for every year.">?</button></div>
         <div class="n" id="kTotal">…</div><div class="s" id="kTotalS"></div>
       </div>
-      <div class="card kpi reveal" style="--c:var(--r4)">
-        <div class="t">Busiest month <button class="q" type="button" data-tip="The month with the most fires on average. Unfinished months are left out.">?</button></div>
-        <div class="n" id="kBusy">…</div><div class="s" id="kBusyS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--r3)">
-        <div class="t">Top 3 years <button class="q" type="button" data-tip="The 3 full years with the most fires. * = Terra only (before July 2002), least certain.">?</button></div>
-        <div class="n small-n" id="kTop">…</div><div class="s" id="kTopS"></div>
-      </div>
-      <div class="card kpi reveal" style="--c:var(--r5)">
-        <div class="t">Last month vs normal <button class="q" type="button" data-tip="The last month of your dates vs the middle value of the same month in 2001–2025.">?</button></div>
-        <div class="n" id="kLatest">…</div><div class="s" id="kLatestS"></div>
-      </div>
-    </div>
-
-    <div class="row-label">What the satellites counted</div>
-    <div class="kpis" aria-label="What the satellites counted">
       <div class="card kpi reveal" style="--c:var(--modis)">
         <div class="t">Fires MODIS saw <button class="q" type="button" data-tip="The older camera (since 2000). Big pixels (1 km), so it misses small fires.">?</button></div>
         <div class="n" id="kModis">…</div><div class="s" id="kModisS"></div>
@@ -303,13 +291,29 @@
         <div class="t">Fires VIIRS saw <button class="q" type="button" data-tip="The newer camera (since 20 Jan 2012). Small pixels (375 m), so it sees more small fires.">?</button></div>
         <div class="n" id="kViirs">…</div><div class="s" id="kViirsS"></div>
       </div>
+      <div class="card kpi reveal" style="--c:var(--harm)">
+        <div class="t">Fire strength <button class="q" type="button" data-tip="Average heat per detection (fire radiative power, in megawatts).">?</button></div>
+        <div class="n" id="kFrp">…</div><div class="s" id="kFrpS"></div>
+      </div>
+    </div>
+
+    <div class="row-label">When fires happen</div>
+    <div class="kpis" aria-label="When fires happen">
+      <div class="card kpi reveal" style="--c:var(--r4)">
+        <div class="t">Busiest month <button class="q" type="button" data-tip="The month with the most fires on average. Unfinished months are left out.">?</button></div>
+        <div class="n" id="kBusy">…</div><div class="s" id="kBusyS"></div>
+      </div>
+      <div class="card kpi reveal" style="--c:var(--r3)">
+        <div class="t">Top 3 years <button class="q" type="button" data-tip="The 3 full years with the most fires. * = Terra only (before July 2002), least certain.">?</button></div>
+        <div class="n small-n" id="kTop">…</div><div class="s" id="kTopS"></div>
+      </div>
       <div class="card kpi clickable reveal" id="kBusyDayCard" role="button" tabindex="0" style="--c:var(--r4)" title="Click to open this day">
         <div class="t">Busiest day <button class="q" type="button" data-tip="The day with the most fires in your dates. Click the card to open it.">?</button></div>
         <div class="n small-n" id="kBusyDay">…</div><div class="s" id="kBusyDayS"></div>
       </div>
-      <div class="card kpi reveal" style="--c:var(--harm)">
-        <div class="t">Fire strength <button class="q" type="button" data-tip="Average heat per detection (fire radiative power, in megawatts).">?</button></div>
-        <div class="n" id="kFrp">…</div><div class="s" id="kFrpS"></div>
+      <div class="card kpi reveal" style="--c:var(--r5)">
+        <div class="t">Last month vs normal <button class="q" type="button" data-tip="The last month of your dates vs the middle value of the same month in 2001–2025.">?</button></div>
+        <div class="n" id="kLatest">…</div><div class="s" id="kLatestS"></div>
       </div>
     </div>
   </section>
@@ -532,11 +536,11 @@
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
 <!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115w"></script>
-<script defer src="js/place-picker.js?v=20261115w"></script>
-<script defer src="js/globe-picker.js?v=20261115w"></script>
-<script defer src="js/date-picker.js?v=20261115w"></script>
-<script defer src="app.js?v=20261115w"></script>
-<script type="module" src="js/bg-scene.js?v=20261115w"></script>
+<script defer src="js/place-search.js?v=20261116a"></script>
+<script defer src="js/place-picker.js?v=20261116a"></script>
+<script defer src="js/globe-picker.js?v=20261116a"></script>
+<script defer src="js/date-picker.js?v=20261116a"></script>
+<script defer src="app.js?v=20261116a"></script>
+<script type="module" src="js/bg-scene.js?v=20261116a"></script>
 </body>
 </html>

@@ -250,3 +250,9 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   globe-picker glow) to match the Earth: light #1769c4 / text #155a9f, dark #4aa8ff / text #7cc4ff.
   Data colours unchanged (fire dots, calendar ramp, MODIS orange, VIIRS purple, fair count). Home: step numbers
   and the rate chip are blue too.
+- Update (user): Key numbers order = satellites row (fair count, MODIS, VIIRS, strength) under "What the satellites
+  counted", then "When fires happen" (busiest month, top 3 years, busiest day, last month vs normal).
+  Default dates = latest 10 years (DEFAULT_YEARS in app.js; QUICK_FROM 2017-01 in process_all.py, first-view
+  totals rebuilt with the new --requick, checked identical for 2001). Date picker Reset = the default.
+  Opens in dark mode by default (new key "pyro-theme"). Light mode: cool sky colours + sky gradient, solid cards.
+  Background canvas is now opaque and paints its own space/sky gradient.

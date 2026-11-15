@@ -8,22 +8,22 @@
 /* ============================================================ TOKENS */
 :root {
   color-scheme: light;
-  /* ---- Phase 6 look: warm paper (light) / warm charcoal (dark), ONE accent: ember */
-  --bg: #f5f1eb;
+  /* ---- light: cool sky blue (goes with the Earth behind the page) / dark: space */
+  --bg: #e9f1f9;
   --bg-glow-a: transparent;
   --bg-glow-b: transparent;
   --bg-glow-c: transparent;
-  --card: #fffcf8;
-  --card-solid: #fffcf8;
+  --card: #fbfdff;
+  --card-solid: #fbfdff;
   --card-hover: #ffffff;
-  --line: #e4dcd1;
-  --line-strong: #d0c5b7;
-  --ink: #1d1915;
-  --ink2: #4b433b;
-  --muted: #6c6359;      /* 5.3:1 on the page background */
-  --chip: #efe8df;
+  --line: #d9e4ef;
+  --line-strong: #c3d2e1;
+  --ink: #0f1d2e;
+  --ink2: #34465c;
+  --muted: #536378;      /* about 5.5:1 on the page background */
+  --chip: #e8eff7;
   --shadow: none;
-  --shadow-lift: 0 6px 18px rgba(60, 40, 20, .08);
+  --shadow-lift: 0 6px 18px rgba(16, 30, 48, .08);
 
   /* the one accent (controls, focus, active states) */
   /* the accent is now OCEAN BLUE, to match the Earth (the old names "ember"
@@ -44,18 +44,18 @@
   --brand-solid: #1769c4;
 
   /* calendar ramp (magnitude): one hue family, light -> dark */
-  --r0: #efe8df;          /* 0 fires */
+  --r0: #e6edf5;          /* 0 fires */
   --r1: #eea458;
   --r2: #e8853f;
   --r3: #d96132;
   --r4: #b83f24;
   --r5: #7f1f14;
-  --nodata-a: #e6ded3;
-  --nodata-b: #f6f1ea;
+  --nodata-a: #dde6ef;
+  --nodata-b: #f2f6fa;
 
   /* chart chrome */
-  --grid: rgba(29, 25, 21, .07);
-  --axis: #6c6359;
+  --grid: rgba(15, 29, 46, .07);
+  --axis: #536378;
 
   /* the old "prism" rainbow is switched off (Phase 6) */
   --prism: var(--ember), var(--ember);
@@ -83,9 +83,9 @@
   --radius-card: 16px;     /* cards */
   --radius-ctrl: 10px;     /* map, pop-ups, small boxes */
   --radius-pill: 999px;    /* badges */
-  --card-edge: rgba(60, 40, 20, .05);
-  --shadow-card: 0 1px 2px rgba(60, 40, 20, .05), 0 8px 24px rgba(60, 40, 20, .07);
-  --shadow-card-hover: 0 2px 4px rgba(60, 40, 20, .06), 0 16px 36px rgba(60, 40, 20, .12);
+  --card-edge: rgba(16, 30, 48, .06);
+  --shadow-card: 0 1px 2px rgba(16, 30, 48, .05), 0 8px 24px rgba(16, 30, 48, .07);
+  --shadow-card-hover: 0 2px 4px rgba(16, 30, 48, .06), 0 16px 36px rgba(16, 30, 48, .12);
   --fs-title: clamp(30px, 3.6vw, 46px);   /* the one big title */
   --fs-section: 19px;                      /* section titles */
   --fs-body: 15px;                         /* normal text */
@@ -1480,8 +1480,7 @@ html.report .map-hint { display: none !important; }
 .bg-scene { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1.8s ease; }
 .bg-scene.on { opacity: 1; }
 .bg-scene canvas { display: block; width: 100%; height: 100%; }
-:root[data-theme="light"] .bg-scene.on { opacity: .55; }
-@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .bg-scene.on { opacity: .55; } }
+/* (the canvas paints its own sky/space, so it is fully opaque in both themes) */
 .card { background: color-mix(in srgb, var(--card) 91%, transparent); }   /* the data stays in focus */
 .controls.filters.as-panel, .rate-pop { background: var(--card-solid); }
 html.report .bg-scene { display: none !important; }
@@ -1496,3 +1495,12 @@ html.report body { background: #fff !important; }
 
 /* the flame in the small picker bar stays fire-coloured */
 .pick-flame { color: #ff6a1f; }
+
+/* Light mode: a soft daytime sky around the Earth (the same light as the globe) */
+:root[data-theme="light"] body { background: radial-gradient(ellipse at 65% 40%, #ffffff 0%, #e6f0fa 45%, #cfe0f1 85%) fixed; }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) body { background: radial-gradient(ellipse at 65% 40%, #ffffff 0%, #e6f0fa 45%, #cfe0f1 85%) fixed; }
+}
+/* Light mode: solid cards (see-through white cards showed the dark Earth as a grey ghost circle) */
+:root[data-theme="light"] .card { background: var(--card); }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .card { background: var(--card); } }

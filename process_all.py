@@ -767,7 +767,8 @@ def check_image(name, monthly, rates, terra_rates, pairs, validation):
 #                    Loaded in the background; needed only when the user
 #                    changes the dates, draws an area or opens a square.
 # ---------------------------------------------------------------------------
-QUICK_FROM = "2001-01"             # = DEFAULT_FROM in web/app.js
+QUICK_FROM = "2017-01"             # = the map's default first month: the latest 10 years
+                                   # (web/app.js DEFAULT_YEARS); change both together, then --requick
 CELLS_FORMAT = 1
 
 
@@ -817,18 +818,8 @@ def write_country_files(data):
     """Write <slug>.json (small) + <slug>.cells.gz. `data` is not changed."""
     slug = data["slug"]
     months = data["months"]
-    q0 = months.index(QUICK_FROM) if QUICK_FROM in months else 0
-    quick = {}
-    for key, rows in data["cells"].items():
-        m = v = h = 0
-        for r in rows:
-            if r[0] >= q0:
-                m += r[1]; v += r[2]; h += r[3] or 0
-        quick[key] = [m, v, short(h)]
     small = {k: x for k, x in data.items() if k not in ("cells", "cell_fields")}
-    small["cell_quick"] = {"from": months[q0], "to": months[-1],
-                           "fields": ["modis", "viirs", "harmonized"],
-                           "squares": quick}
+    small["cell_quick"] = quick_totals(data["cells"], months)
     small["cells_file"] = f"{slug}.cells.gz"
     small["cell_fields"] = data.get("cell_fields")
     OUT_COUNTRY.mkdir(parents=True, exist_ok=True)
@@ -895,6 +886,35 @@ def run_repack():
         n += 1
     print(f"Repacked {n} files in {time.time() - t0:.0f} s, all checked. "
           f"Download size (gzip): {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
+
+
+def quick_totals(cells, months):
+    """One total per square from QUICK_FROM to the last month (the first view)."""
+    q0 = months.index(QUICK_FROM) if QUICK_FROM in months else 0
+    quick = {}
+    for key, rows in cells.items():
+        m = v = h = 0
+        for r in rows:
+            if r[0] >= q0:
+                m += r[1]; v += r[2]; h += r[3] or 0
+        quick[key] = [m, v, short(h)]
+    return {"from": months[q0], "to": months[-1], "fields": ["modis", "viirs", "harmonized"], "squares": quick}
+
+
+def run_requick():
+    """Rebuild only the first-view square totals (cell_quick) of every place,
+    from its own .cells.gz (after QUICK_FROM changed). No zips needed; the
+    squares and every other number stay exactly the same."""
+    t0, n = time.time(), 0
+    for path in sorted(OUT_COUNTRY.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        blob = OUT_COUNTRY / data.get("cells_file", "")
+        if not data.get("cells_file") or not blob.exists():
+            continue
+        data["cell_quick"] = quick_totals(unpack_cells(blob.read_bytes()), data["months"])
+        path.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+        n += 1
+    print(f"First-view totals rebuilt for {n} places from {QUICK_FROM} ({time.time() - t0:.0f} s)")
 
 
 def export_country(name, agg, global_rate, global_terra, image=False):
@@ -1228,10 +1248,14 @@ def main():
                     help="rebuild only world.json from saved work")
     ap.add_argument("--repack", action="store_true",
                     help="split old country JSONs into .json + .cells.gz")
+    ap.add_argument("--requick", action="store_true",
+                    help="rebuild only the first-view square totals (after QUICK_FROM changed)")
     args = ap.parse_args()
     config.make_folders()
     if args.repack:
         run_repack()
+    elif args.requick:
+        run_requick()
     elif args.world:
         run_world()
     elif args.country:

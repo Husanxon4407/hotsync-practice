@@ -15,7 +15,8 @@
 
 // ------------------------------------------------------------------ SETTINGS
 const DEFAULT_COUNTRY = "world";            // first view: all countries together
-const DEFAULT_FROM = "2001-01";
+const DEFAULT_YEARS = 10;                   // first view: the latest 10 years (process_all.py QUICK_FROM)
+const defaultFrom = (last) => `${+last.slice(0, 4) - DEFAULT_YEARS + 1}-01`;
 const NORMAL_YEARS = [2001, 2025];          // "normal" = median of these years
 const AQUA_START = "2002-07";                // before this: Terra-only MODIS months
 // Fire dots for the whole planet: NASA FIRMS dots drawn by NASA GIBS (WMS).
@@ -39,7 +40,7 @@ const state = {
   countries: [],        // countries.json
   cache: new Map(),     // slug -> country JSON (loaded once, kept in memory)
   c: null,              // the country we show now
-  from: DEFAULT_FROM,   // date range 'YYYY-MM'
+  from: null,           // date range 'YYYY-MM' (null = the default: latest 10 years)
   to: null,
   area: null,           // null = whole country, or {feature, label, layer}
   selCells: null,       // null = all squares, or Set of square keys inside the area
@@ -159,7 +160,7 @@ const themeMode = () => document.documentElement.dataset.theme || "auto";
 function setTheme(mode) {
   if (mode === "auto") delete document.documentElement.dataset.theme;
   else document.documentElement.dataset.theme = mode;
-  try { localStorage.setItem("hotsync-theme", mode); } catch (e) { /* ignore */ }
+  try { localStorage.setItem("pyro-theme", mode); } catch (e) { /* ignore */ }
   $("themeBtn").innerHTML = THEME_ICONS[mode];
   $("themeBtn").title = "Theme: " + mode + " (click to change)";
   if (state.c) recolor();
@@ -721,7 +722,9 @@ async function chooseCountry(slug) {
   const last = data.months[data.months.length - 1];
   // Keep the user's dates if they still fit, otherwise use the default.
   state.to = !state.to || state.to > last ? last : state.to;
+  if (!state.from) state.from = defaultFrom(last);
   if (state.from < data.months[0]) state.from = data.months[0];
+  if (state.from > state.to) state.from = state.to;
   state.day = dayAt(data.daily.modis.length - 1);   // latest day with data
   state.period = { kind: "range" };
   // "This month vs normal" starts at the latest month; the satellite
@@ -867,7 +870,7 @@ function dateData() {
     yearTotals[y] = (yearTotals[y] || 0) + v;
   });
   const partialYear = last.slice(5) !== "12" || c.inProgress ? +last.slice(0, 4) : null;
-  return { first: m[0], last, from: state.from, to: state.to, yearTotals, partialYear };
+  return { first: m[0], last, from: state.from, to: state.to, yearTotals, partialYear, defaultFrom: defaultFrom(last) };
 }
 
 function setupDateInputs() {

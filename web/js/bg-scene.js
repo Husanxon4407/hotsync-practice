@@ -42,7 +42,9 @@ async function start() {
   if (!host) return;
   let renderer;
   try {
-    renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: "low-power" });
+    // Opaque canvas with its own sky/space gradient (a see-through canvas was
+    // blended wrongly by the browser behind some cards: a pale disc on the Earth)
+    renderer = new THREE.WebGLRenderer({ alpha: false, antialias: true, powerPreference: "low-power" });
   } catch (e) { return; }                                   // no WebGL: the page stays as it is
   renderer.setPixelRatio(Math.min(devicePixelRatio, 1.25));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -50,6 +52,30 @@ async function start() {
 
   let raf = 0, last = 0, t = 0, ready = false;       // (declared first: a cached picture can arrive at once)
   const scene = new THREE.Scene();
+  // the page background, painted in the scene: deep space (dark) or a daytime sky (light)
+  const isDark = () => {
+    const t = document.documentElement.dataset.theme;
+    return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  };
+  let skyDark = null;
+  function paintSky() {
+    const dark = isDark();
+    if (dark === skyDark) return;
+    skyDark = dark;
+    const c = document.createElement("canvas");
+    c.width = 1024; c.height = 640;
+    const g = c.getContext("2d");
+    const grd = g.createRadialGradient(0.65 * 1024, 0.4 * 640, 0, 0.65 * 1024, 0.4 * 640, 900);
+    const stops = dark ? [[0, "#10243c"], [0.45, "#050f20"], [0.8, "#020914"], [1, "#020914"]]
+      : [[0, "#ffffff"], [0.45, "#e6f0fa"], [0.85, "#cfe0f1"], [1, "#cfe0f1"]];
+    stops.forEach(([k, col]) => grd.addColorStop(k, col));
+    g.fillStyle = grd;
+    g.fillRect(0, 0, c.width, c.height);
+    if (scene.background) scene.background.dispose();
+    scene.background = new THREE.CanvasTexture(c);
+    scene.background.colorSpace = THREE.SRGBColorSpace;
+  }
+  paintSky();
   // the same camera and lights as the home page Earth (home/earth.js)
   const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
   camera.position.z = 8;
@@ -186,7 +212,9 @@ async function start() {
   document.addEventListener("visibilitychange", wake);
   motion.addEventListener("change", wake);
   // printing / full screen map: stop; back: go on (both change a class)
-  new MutationObserver(wake).observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+  // theme switch: new sky; printing / full screen map: stop (both change attributes on <html>)
+  new MutationObserver(() => { paintSky(); wake(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ["class", "data-theme"] });
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { paintSky(); draw(); });
   document.addEventListener("fullscreenchange", wake);
   document.addEventListener("click", () => setTimeout(wake, 50));     // the map's full-screen button
   renderer.domElement.addEventListener("webglcontextlost", (e) => { e.preventDefault(); cancelAnimationFrame(raf); host.hidden = true; });

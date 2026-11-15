@@ -85,7 +85,7 @@
         else if (t.dataset.year) { pend.year = +t.dataset.year; draw(); focusMonth(); }
         else if (t.dataset.step) moveYear(+t.dataset.step);
         else if (t.dataset.m) pickMonth(t.dataset.m);
-        else if (t.dataset.act === "reset") { pend.start = firstPick(); pend.end = d.last; pend.next = "start"; pend.year = +d.last.slice(0, 4); draw(); }
+        else if (t.dataset.act === "reset") { pend.start = d.defaultFrom || firstPick(); pend.end = d.last; pend.next = "start"; pend.year = +d.last.slice(0, 4); draw(); }
         else if (t.dataset.act === "apply") apply();
       });
       // preview the range while choosing the end month
