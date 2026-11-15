@@ -28,7 +28,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115l">
+<link rel="stylesheet" href="style.css?v=20261115n">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -190,89 +190,99 @@
   </section>
 
   <!-- ============ MAP ============ -->
-  <section id="where" class="grid-2">
-    <div class="card reveal">
-      <div class="card-head">
-        <h2><span class="num">1</span> Where the fires were</h2>
-        <span class="hint" id="mapHint">Draw an area with the tools on the left · click a dot for its numbers</span>
-      </div>
-      <div class="map-wrap">
-        <div id="map" role="region" aria-label="Map of fire squares"></div>
-        <div class="map-msg" id="mapMsg" aria-live="polite"></div>
-      </div>
-      <div class="legend" id="mapLegend"></div>
+  <!-- The map uses the full card width. Its buttons sit INSIDE the map, in one
+       bar at the top (what the dots show, Play through time, background,
+       full screen); a small legend sits in the bottom-left corner. -->
+  <section id="where" class="card reveal map-card">
+    <div class="card-head">
+      <h2><span class="num">1</span> Where the fires were</h2>
+      <span class="hint" id="mapHint">Click a dot for its numbers · draw an area with the tools on the left</span>
     </div>
 
-    <div class="card reveal side-card">
-      <div class="card-head" style="margin-bottom:4px"><h2>Map settings</h2></div>
+    <div class="map-wrap" id="mapWrap">
+      <div id="map" role="region" aria-label="Map of fire hotspots"></div>
 
-      <div class="field">
-        <div class="lbl">The map shows</div>
-        <div class="period" id="mapPeriod">…</div>
-        <button class="ghost-btn" id="periodResetBtn" type="button" hidden>Show the whole date range</button>
-      </div>
-
-      <div class="field">
-        <div class="lbl">Fire dots show</div>
-        <div class="seg" id="squareSeg" role="group" aria-label="What the fire dots show"><span class="thumb"></span></div>
-      </div>
-
-      <div class="field">
-        <div class="lbl">Background</div>
-        <div class="seg" id="bgSeg" role="group" aria-label="Map background"><span class="thumb"></span></div>
-      </div>
-
-      <form class="field" id="boxForm" aria-labelledby="boxTitle">
-        <div class="lbl" id="boxTitle">Or type a box: its edges in degrees (longitude West/East, latitude South/North)</div>
-        <div class="box-grid">
-          <label>West<input type="number" step="any" id="boxW" required min="-180" max="180"></label>
-          <label>South<input type="number" step="any" id="boxS" required min="-90" max="90"></label>
-          <label>East<input type="number" step="any" id="boxE" required min="-180" max="180"></label>
-          <label>North<input type="number" step="any" id="boxN" required min="-90" max="90"></label>
+      <div class="map-top" id="mapTop">
+        <!-- The 3 numbers ARE the buttons: pick what the dots show -->
+        <div class="map-modes" id="modeBtns" role="group" aria-label="What the fire dots show">
+          <button type="button" class="mode-btn" data-key="harmonized" aria-pressed="true" style="--mc:#e0412f">
+            <span class="mb-l">Fair count</span><b class="mb-n" id="mbH">…</b></button>
+          <button type="button" class="mode-btn" data-key="modis" aria-pressed="false" style="--mc:#f16913">
+            <span class="mb-l">MODIS</span><b class="mb-n" id="mbM">…</b></button>
+          <button type="button" class="mode-btn" data-key="viirs" aria-pressed="false" style="--mc:#8c7fd0">
+            <span class="mb-l">VIIRS</span><b class="mb-n" id="mbV">…</b></button>
         </div>
-        <button class="play" type="submit">Use this box</button>
-      </form>
-
-      <!-- Live fires: last 48 hours, whole world, clickable (robot file) -->
-      <div class="field">
-        <label class="toggle"><input type="checkbox" id="liveToggle"><span class="dot live-dot"></span> Live fires: last 48 h (click a dot)</label>
-        <div class="small" id="liveNote"></div>
+        <!-- Time: play the fires year by year (or month by month for short dates) -->
+        <div class="map-time">
+          <button class="play" id="playBtn" type="button" aria-label="Play the fires through time"></button>
+          <input type="range" id="playSlider" min="0" max="1" value="0" aria-label="Time on the map (0 = all chosen dates)">
+          <span class="map-period" id="mapPeriod" aria-live="polite">…</span>
+          <button class="text-btn" id="periodResetBtn" type="button" hidden>All dates</button>
+        </div>
+        <div class="map-right">
+          <div class="map-bg seg" id="bgSeg" role="group" aria-label="Map background"><span class="thumb"></span></div>
+          <button class="map-full-btn" id="fullBtn" type="button" aria-label="Full screen map" aria-pressed="false" title="Full screen map"></button>
+        </div>
       </div>
 
-      <!-- Fire dots for the whole planet, any day since Nov 2000 (NASA GIBS) -->
-      <div class="field">
-        <label class="toggle"><input type="checkbox" id="fireToggle"><span class="dot" style="background:var(--modis)"></span> Fire dots on any day since 2000 (whole planet)</label>
-        <div class="fire-row">
-          <button class="ghost-btn" id="firePrev" type="button" aria-label="Earlier dots">◀</button>
-          <label class="sr-only" for="fireDate">Date of the fire dots</label>
-          <input type="date" id="fireDate">
-          <button class="ghost-btn" id="fireNext" type="button" aria-label="Later dots">▶</button>
-        </div>
-        <div class="seg" id="fireSpan" role="group" aria-label="How many days of fire dots"><span class="thumb"></span></div>
-        <div class="fire-row">
-          <label class="toggle"><input type="checkbox" id="fireModis" checked><span class="dot" style="background:var(--modis)"></span> MODIS (from Nov 2000)</label>
-          <label class="toggle"><input type="checkbox" id="fireViirs" checked><span class="dot" style="background:var(--viirs)"></span> VIIRS (from 20 Jan 2012)</label>
-        </div>
-        <div class="small" id="fireNote"></div>
-      </div>
-
-      <!-- Satellite picture from NASA GIBS under the squares -->
-      <div class="field">
-        <label class="toggle"><input type="checkbox" id="gibsToggle"><span class="dot" style="background:#b8532f"></span> Satellite picture (NASA GIBS)</label>
-        <div class="gibs-row">
-          <label class="sr-only" for="gibsLayer">Picture type</label>
-          <select id="gibsLayer">
-            <option value="MODIS_Terra_CorrectedReflectance_Bands721">MODIS Terra 7-2-1 (burned land looks reddish)</option>
-            <option value="VIIRS_NOAA20_CorrectedReflectance_TrueColor">VIIRS NOAA-20 true colour (from 2018)</option>
-          </select>
-          <label class="sr-only" for="gibsDate">Picture date</label>
-          <input type="date" id="gibsDate">
-        </div>
-        <div class="small" id="gibsNote">Clicking a month in the calendar sets the picture date to the 15th of that month.</div>
-      </div>
-
-      <div class="note-box" id="areaStats" aria-live="polite"></div>
+      <div class="map-legend" id="mapLegend"></div>
+      <div class="map-msg" id="mapMsg" aria-live="polite"></div>
     </div>
+    <div class="small area-note" id="areaStats" aria-live="polite"></div>
+
+    <details class="map-more">
+      <summary>More map tools</summary>
+      <div class="map-more-grid">
+        <form class="field" id="boxForm" aria-labelledby="boxTitle">
+          <div class="lbl" id="boxTitle">Type a box: its edges in degrees</div>
+          <div class="box-grid">
+            <label>West<input type="number" step="any" id="boxW" required min="-180" max="180"></label>
+            <label>South<input type="number" step="any" id="boxS" required min="-90" max="90"></label>
+            <label>East<input type="number" step="any" id="boxE" required min="-180" max="180"></label>
+            <label>North<input type="number" step="any" id="boxN" required min="-90" max="90"></label>
+          </div>
+          <button class="play" type="submit">Use this box</button>
+        </form>
+
+        <!-- Live fires: last 48 hours, whole world, clickable (robot file) -->
+        <div class="field">
+          <label class="toggle"><input type="checkbox" id="liveToggle"><span class="dot live-dot"></span> Live fires: last 48 h (click a dot)</label>
+          <div class="small" id="liveNote"></div>
+        </div>
+
+        <!-- Fire dots for the whole planet, any day since Nov 2000 (NASA GIBS) -->
+        <div class="field">
+          <label class="toggle"><input type="checkbox" id="fireToggle"><span class="dot" style="background:var(--modis)"></span> NASA fire dots on one day (whole planet)</label>
+          <div class="fire-row">
+            <button class="ghost-btn" id="firePrev" type="button" aria-label="Earlier dots">◀</button>
+            <label class="sr-only" for="fireDate">Date of the fire dots</label>
+            <input type="date" id="fireDate">
+            <button class="ghost-btn" id="fireNext" type="button" aria-label="Later dots">▶</button>
+          </div>
+          <div class="seg" id="fireSpan" role="group" aria-label="How many days of fire dots"><span class="thumb"></span></div>
+          <div class="fire-row">
+            <label class="toggle"><input type="checkbox" id="fireModis" checked><span class="dot" style="background:var(--modis)"></span> MODIS (from Nov 2000)</label>
+            <label class="toggle"><input type="checkbox" id="fireViirs" checked><span class="dot" style="background:var(--viirs)"></span> VIIRS (from 20 Jan 2012)</label>
+          </div>
+          <div class="small" id="fireNote"></div>
+        </div>
+
+        <!-- Satellite picture from NASA GIBS under the dots -->
+        <div class="field">
+          <label class="toggle"><input type="checkbox" id="gibsToggle"><span class="dot" style="background:#b8532f"></span> Satellite picture (NASA GIBS)</label>
+          <div class="gibs-row">
+            <label class="sr-only" for="gibsLayer">Picture type</label>
+            <select id="gibsLayer">
+              <option value="MODIS_Terra_CorrectedReflectance_Bands721">MODIS Terra 7-2-1 (burned land looks reddish)</option>
+              <option value="VIIRS_NOAA20_CorrectedReflectance_TrueColor">VIIRS NOAA-20 true colour (from 2018)</option>
+            </select>
+            <label class="sr-only" for="gibsDate">Picture date</label>
+            <input type="date" id="gibsDate">
+          </div>
+          <div class="small" id="gibsNote">Clicking a month in the calendar sets the picture date to the 15th of that month.</div>
+        </div>
+      </div>
+    </details>
   </section>
 
   <!-- ============ FIRE CALENDAR ============ -->
@@ -480,10 +490,10 @@
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
 <!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115l"></script>
-<script defer src="js/place-picker.js?v=20261115l"></script>
-<script defer src="js/globe-picker.js?v=20261115l"></script>
-<script defer src="js/date-picker.js?v=20261115l"></script>
-<script defer src="app.js?v=20261115l"></script>
+<script defer src="js/place-search.js?v=20261115n"></script>
+<script defer src="js/place-picker.js?v=20261115n"></script>
+<script defer src="js/globe-picker.js?v=20261115n"></script>
+<script defer src="js/date-picker.js?v=20261115n"></script>
+<script defer src="app.js?v=20261115n"></script>
 </body>
 </html>

@@ -366,7 +366,7 @@ h2 .num { font-size: 11px; font-weight: 700; color: #fff; background: var(--bran
 .toggle:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* ============================================================ MAP */
-#map { height: 500px; border-radius: 6px; background: var(--chip); z-index: 0; }
+#map { height: 580px; border-radius: 6px; background: var(--chip); z-index: 0; }
 #map.map-earth { background: #0a1a2e; }            /* deep sea blue while the Earth picture loads */
 /* legend: the 3 fire-dot sizes */
 .hot-key { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle; }
@@ -647,7 +647,7 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 650; }
   .f-row { grid-template-columns: 110px minmax(0, 1fr) 80px; }
   .ratio-item { grid-template-columns: 120px minmax(0, 1fr) 42px; }
   .stat-row { grid-template-columns: 110px minmax(0, 1fr) 48px; }
-  #map { height: 340px; }
+  #map { height: 420px; }
   .seg button { padding: 5px 9px; }
   #countryInput { width: 100%; }
   .controls .ctrl { flex-wrap: wrap; width: 100%; }
@@ -1036,3 +1036,107 @@ html.report .report-foot .ack { font-size: 7.5px; color: #555; }
   html.report main { max-width: none; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ================================================================
+   MAP CARD: the map over the full width. Its buttons sit INSIDE the
+   map (one bar at the top), a small legend in the bottom-left corner,
+   extra tools folded under "More map tools". Full screen button.
+   ================================================================ */
+.map-card { display: block; }
+.map-wrap { --glass: color-mix(in srgb, #141210 80%, transparent); --glass-ink: #efe9e1; --glass-line: rgba(255, 255, 255, .14); }
+
+/* the bar at the top of the map */
+.map-top {
+  position: absolute; z-index: 600; top: 10px; left: 10px; right: 10px;
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 6px; border-radius: 6px; background: var(--glass); color: var(--glass-ink);
+  border: 1px solid var(--glass-line); box-shadow: 0 4px 18px rgba(0, 0, 0, .35);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.map-modes { display: flex; gap: 4px; }
+.mode-btn {
+  display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 9px 5px 11px;
+  border-radius: 5px; border: 1px solid transparent; background: transparent; color: var(--glass-ink);
+  position: relative; overflow: hidden; white-space: nowrap;
+}
+.mode-btn::before { content: ""; position: absolute; left: 0; top: 5px; bottom: 5px; width: 3px; border-radius: 2px; background: var(--mc); opacity: .5; }
+.mode-btn .mb-l { font-size: 12px; color: #b8aea3; }
+.mode-btn .mb-n { font-family: var(--font-mono); font-size: 13.5px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mode-btn:hover { background: rgba(255, 255, 255, .07); }
+.mode-btn[aria-pressed="true"] { background: color-mix(in srgb, var(--mc) 30%, transparent); border-color: var(--mc); }
+.mode-btn[aria-pressed="true"]::before { opacity: 1; }
+.mode-btn[aria-pressed="true"] .mb-l { color: #fff; font-weight: 600; }
+.mode-btn:active { transform: translateY(1px); }
+.mode-btn:focus-visible { outline: 2px solid var(--mc); outline-offset: 1px; }
+
+.map-time { display: flex; align-items: center; gap: 9px; flex: 1 1 240px; min-width: 0; }
+.map-time .play { padding: 5px 11px; font-size: 12.5px; min-width: 74px; justify-content: center; }
+.map-time input[type=range] { flex: 1 1 100px; min-width: 70px; accent-color: var(--ember); }
+.map-period { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.map-time .text-btn { color: #ffb27a; padding: 2px; }
+
+.map-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.map-bg.seg { background: rgba(255, 255, 255, .06); border-color: var(--glass-line); padding: 2px; }
+.map-bg.seg button { padding: 4px 9px; font-size: 12px; color: #c9c0b5; }
+.map-bg.seg button[aria-pressed="true"] { color: var(--on-ember); }
+.map-full-btn {
+  display: inline-grid; place-items: center; width: 32px; height: 30px; border-radius: 5px;
+  border: 1px solid var(--glass-line); background: rgba(255, 255, 255, .06); color: var(--glass-ink);
+}
+.map-full-btn:hover { border-color: var(--ember); color: #ffb27a; }
+.map-full-btn:active { transform: translateY(1px); }
+
+/* Leaflet's own buttons (zoom, drawing) go under the bar */
+.map-wrap .leaflet-top { top: var(--bar-h, 56px); }
+
+/* small legend in the bottom-left corner */
+.map-legend {
+  position: absolute; z-index: 600; left: 10px; bottom: 10px; max-width: calc(100% - 240px);
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+  padding: 4px 10px; border-radius: 5px; font-size: 11.5px; line-height: 1.5;
+  background: var(--glass); color: #d9d0c6; border: 1px solid var(--glass-line);
+}
+.map-legend:empty { display: none; }
+.map-legend .key { display: inline-flex; align-items: center; gap: 5px; }
+.map-legend .hot-key { margin: 0 1px; gap: 3px; }
+.map-legend .dot { width: 8px; height: 8px; }
+.map-msg { top: auto; bottom: 46px; }
+
+.area-note:empty { display: none; }
+.area-note { margin-top: 6px; }
+
+/* "More map tools": one small line until opened */
+.map-more { margin-top: 8px; }
+.map-more summary { cursor: pointer; font-size: 12.5px; color: var(--muted); list-style: none; display: inline-flex; gap: 6px; align-items: center; }
+.map-more summary:hover { color: var(--ink); }
+.map-more summary::-webkit-details-marker { display: none; }
+.map-more summary::before { content: "▸"; color: var(--ember-text); transition: transform .2s; display: inline-block; }
+.map-more[open] summary::before { transform: rotate(90deg); }
+.map-more-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 22px; margin-top: 10px; font-size: 13px; }
+
+/* full screen: the map with all its buttons covers the whole page */
+.map-wrap.is-full { position: fixed; inset: 0; z-index: 3000; background: #0a1a2e; border-radius: 0; }
+.map-wrap.is-full #map { height: 100%; border-radius: 0; }
+.map-wrap:fullscreen { width: 100%; height: 100%; }
+html.map-full-open { overflow: hidden; }
+
+@media (max-width: 760px) {
+  .map-top { top: 6px; left: 6px; right: 6px; gap: 6px; padding: 5px; }
+  .map-modes { flex: 1 1 100%; }
+  .mode-btn { flex: 1; flex-direction: column; gap: 0; padding: 3px 6px 3px 9px; }
+  .mode-btn .mb-l { font-size: 10.5px; }
+  .mode-btn .mb-n { font-size: 12.5px; }
+  .map-time { flex: 1 1 100%; order: 3; }
+  .map-right { position: absolute; right: 5px; top: calc(100% + 6px); }
+  .map-period { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 11px; }
+  .map-time input[type=range] { min-width: 50px; }
+  .map-legend { max-width: calc(100% - 16px); left: 8px; bottom: 34px; font-size: 10.5px; gap: 8px; }
+  .map-wrap .leaflet-control-attribution { font-size: 9px; max-width: 100%; }
+  .map-wrap #map { height: 460px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .map-more summary::before { transition: none; }
+}
+html.report .map-top, html.report .map-more, html.report .area-note { display: none !important; }
+html.report .map-wrap .leaflet-top { top: 0; }
+html.report .map-legend { font-size: 8px; padding: 2px 6px; max-width: 100%; }

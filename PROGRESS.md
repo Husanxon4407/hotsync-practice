@@ -186,3 +186,16 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
 - Sticky control box shrinks to one slim row when scrolled (laptops). Map height 500 px.
 - Update (user): only the STRONGEST hotspots = 60% of the fires; colour = level, light -> dark, in each mode's own colour
   (fair count Reds, MODIS Oranges, VIIRS Purples, ColorBrewer, 5 steps with the same number of dots); min dot ~5 px.
+
+---
+## 2026-11-15 · Map card: full width, numbers + Play above (asked by the user)
+- Right "Map settings" panel removed. The map now uses the full card width (580 px high, 420 px on phones).
+- Above the map: 3 number buttons (Fair count / MODIS saw / VIIRS saw) = the totals AND the switch for the dots
+  (like the first prototype), then a time line: Play/Pause + slider (one frame per year, per month if dates <= 2 years).
+- Earth/Streets switch sits on the map (top right). Box, live fires, NASA daily dots, satellite picture: "More map tools".
+- Dots: strongest places with 80% of the fires (max 5,000 dots), 5 levels: light + small -> dark + big, wider colour ramps.
+- Tested: World, Brazil (Play, MODIS/VIIRS buttons, "no data" before 2012), calendar month click, All dates, print report.
+- Update (user): the buttons moved INSIDE the map (one glass bar at the top, in line with Earth/Streets),
+  legend = small label in the bottom-left corner, "More map tools" = one small line. Full screen button
+  (real browser full screen, Esc or the button to leave). A country zooms to its real border (biggest part),
+  zoom steps of 1/4, world outside darker. Tested laptop + 380 px, full screen in/out.

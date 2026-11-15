@@ -567,7 +567,7 @@ function applyHash(H) {
   if (state.live) renderLive();
   if (H.v) {
     const [la, lo, z] = H.v.split(",").map(Number);
-    if ([la, lo, z].every(Number.isFinite)) map.setView([la, lo], z, { animate: false });
+    if ([la, lo, z].every(Number.isFinite)) { map.setView([la, lo], z, { animate: false }); refitOnBorders = false; }
   }
 }
 
@@ -631,7 +631,7 @@ async function start() {
     if (okMonth(H.from)) state.from = H.from;
     if (okMonth(H.to)) state.to = H.to;
     if (flip(MODE_CODE)[H.mode]) state.calMode = flip(MODE_CODE)[H.mode];
-    if (flip(SQ_CODE)[H.sq]) state.squareMode = flip(SQ_CODE)[H.sq];
+    if (flip(SQ_CODE)[H.sq] && H.sq !== "off") state.squareMode = flip(SQ_CODE)[H.sq];
     if (H.bg === "streets") state.bg = "streets";
   }
   buildControls();
@@ -701,6 +701,7 @@ async function chooseCountry(slug) {
     data.cellKeys = [...new Set([...Object.keys(data.quick || data.cells), ...Object.keys(data.recentCells || {})])];
   }
   setLoading("");
+  stopPlay();
   state.c = data;
   const last = data.months[data.months.length - 1];
   // Keep the user's dates if they still fit, otherwise use the default.
@@ -741,6 +742,7 @@ function buildControls() {
     button: $("dateBtn"),
     getData: dateData,
     onApply: (a, b) => {
+      stopPlay();
       state.from = a; state.to = b;
       state.period = { kind: "range" };
       setupDateInputs();
@@ -753,12 +755,19 @@ function buildControls() {
   // Calendar mode + square mode
   makeSeg($("calSeg"), [["harmonized", "Fair count"], ["modis", "MODIS saw"], ["viirs", "VIIRS saw"], ["anomaly", "vs normal"]],
     state.calMode, (k) => { state.calMode = k; renderCalendar(); });
-  makeSeg($("squareSeg"), [["harmonized", "Fair count"], ["modis", "MODIS saw"], ["viirs", "VIIRS saw"], ["off", "Hide"]],
-    state.squareMode, (k) => { state.squareMode = k; renderMap(); });
+  // What the dots show: the 3 number buttons above the map
+  const modeBtns = $("modeBtns").querySelectorAll(".mode-btn");
+  const markMode = () => modeBtns.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.key === state.squareMode)));
+  modeBtns.forEach((b) => b.addEventListener("click", () => { state.squareMode = b.dataset.key; markMode(); renderMap(); }));
+  markMode();
+  // Time on the map: slider + Play (year by year, or month by month)
+  $("playBtn").addEventListener("click", () => (playTimer ? stopPlay() : startPlay()));
+  $("playSlider").addEventListener("input", (e) => { stopPlay(); showFrame(+e.target.value); });
+  playButton();
   makeSeg($("bgSeg"), [["earth", "Earth (NASA)"], ["streets", "Streets"]],
     state.bg, (k) => { setBackground(k); renderMap(); });
 
-  $("periodResetBtn").addEventListener("click", () => { state.period = { kind: "range" }; render(); });
+  $("periodResetBtn").addEventListener("click", () => { stopPlay(); state.period = { kind: "range" }; render(); });
 
   // Lat/lon box
   $("boxForm").addEventListener("submit", (e) => {
@@ -794,6 +803,7 @@ function buildControls() {
   $("dayPrev").addEventListener("click", () => stepDay(-1));
   $("dayNext").addEventListener("click", () => stepDay(1));
   $("dayDotsBtn").addEventListener("click", () => {
+    stopPlay();
     state.period = { kind: "day", day: state.day };
     Object.assign(state.fire, { on: true, date: state.day, span: "1" });
     setSeg($("fireSpan"), "1");
@@ -1181,7 +1191,7 @@ function initMap() {
   renderer = L.canvas({ padding: 0.5 });    // canvas = fast with many shapes
   // scrollWheelZoom off at first: scrolling the PAGE over the map must not
   // zoom the map. A click on the map turns wheel zoom on; leaving turns it off.
-  map = L.map("map", { preferCanvas: true, zoomSnap: 0.5, worldCopyJump: true, scrollWheelZoom: false }).setView([41.4, 64.6], 5);
+  map = L.map("map", { preferCanvas: true, zoomSnap: 0.25, worldCopyJump: true, scrollWheelZoom: false }).setView([41.4, 64.6], 5);
   map.on("click", () => map.scrollWheelZoom.enable());
   map.on("mouseout", () => map.scrollWheelZoom.disable());
   // Backgrounds (see setBackground): NASA Blue Marble, or streets (with place names).
@@ -1200,6 +1210,7 @@ function initMap() {
   });
   setBackground(state.bg);
   map.setMinZoom(1);
+  setupMapOverlay();
   map.on("zoomend", () => styleDots());            // dots grow when you zoom in
   // Own layer ("pane") for the NASA satellite picture: above the street map,
   // below the squares and dots. (Outside the tile pane, so dark mode doesn't
@@ -1234,32 +1245,91 @@ function initMap() {
   map.on("pm:remove", (e) => { if (state.area && e.layer === state.area.layer) { clearArea(true); render(); } });
 }
 
+// Room the map buttons (top bar) and the legend (bottom) take inside the map
+function mapPad() {
+  const top = $("mapTop").offsetHeight + 12, bottom = $("mapLegend").offsetHeight + 14;
+  return { paddingTopLeft: [16, top], paddingBottomRight: [16, bottom] };
+}
 function fitCountry() {
   // World: the whole Earth fits in the map, like a flat globe.
-  if (isWorld()) { map.fitBounds([[-56, -168], [76, 178]], { animate: false }); return; }
+  if (isWorld()) { map.fitBounds([[-56, -168], [76, 178]], { animate: false, ...mapPad() }); return; }
+  // A country: zoom to its border (its biggest part, so far islands don't
+  // make it small), with the world outside darker (drawBorders).
+  refitOnBorders = !bordersData;   // borders not here yet: fit again when they arrive
+  const f = bordersData && bordersData.features.find((x) => x.properties.slug === state.c.slug);
+  if (f) {
+    const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+    const area = (r) => { let t = 0; for (let i = 0, j = r.length - 1; i < r.length; j = i++) t += (r[j][0] + r[i][0]) * (r[j][1] - r[i][1]); return Math.abs(t / 2); };
+    const big = polys.reduce((x, y) => (area(y[0]) > area(x[0]) ? y : x));
+    map.fitBounds(L.latLngBounds(big[0].map(([x, y]) => [y, x])), mapPad());
+    return;
+  }
   const [w, s, e, n] = state.c.bbox;
-  if (e - w <= 180) { map.fitBounds([[s, w], [n, e]], { padding: [14, 14] }); return; }
+  if (e - w <= 180) { map.fitBounds([[s, w], [n, e]], mapPad()); return; }
   // Countries across the 180° line (Russia, Fiji...) have a box around the
   // whole world. Zoom to the half (east or west) that has most fire places.
   const pts = [...squares.values()].map((d) => d.getLatLng());
   const east = pts.filter((q) => q.lng >= 0), west = pts.filter((q) => q.lng < 0);
   const side = east.length >= west.length ? east : west;
-  map.fitBounds(side.length ? L.latLngBounds(side) : [[s, w], [n, e]], { padding: [14, 14] });
+  map.fitBounds(side.length ? L.latLngBounds(side) : [[s, w], [n, e]], mapPad());
+}
+
+// The bar inside the top of the map + the full screen button
+function setupMapOverlay() {
+  const wrap = $("mapWrap"), top = $("mapTop");
+  for (const el of [top, $("mapLegend")]) { L.DomEvent.disableClickPropagation(el); L.DomEvent.disableScrollPropagation(el); }
+  // Leaflet's own buttons (zoom, drawing) move down under the bar
+  const place = () => wrap.style.setProperty("--bar-h", top.offsetHeight + 16 + "px");
+  new ResizeObserver(place).observe(top);
+  place();
+  const btn = $("fullBtn");
+  const icon = (on) => {
+    btn.innerHTML = on
+      ? '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>';
+    btn.setAttribute("aria-pressed", String(on));
+    btn.title = btn.ariaLabel = on ? "Leave full screen (Esc)" : "Full screen map";
+  };
+  const setFull = (on) => {
+    const c = map.getCenter(), z = map.getZoom();
+    wrap.classList.toggle("is-full", on);
+    document.documentElement.classList.toggle("map-full-open", on);
+    icon(on);
+    // the map keeps its centre; a bigger box = a little closer zoom is fine
+    requestAnimationFrame(() => { map.invalidateSize(); map.setView(c, z, { animate: false }); styleDots(); });
+  };
+  btn.addEventListener("click", () => {
+    const on = !wrap.classList.contains("is-full");
+    if (on) {
+      setFull(true);
+      // real full screen when the browser allows it (hides the browser bars too)
+      if (wrap.requestFullscreen) wrap.requestFullscreen().catch(() => {});
+    } else if (document.fullscreenElement) document.exitFullscreen().catch(() => setFull(false));
+    else setFull(false);
+  });
+  document.addEventListener("fullscreenchange", () => {
+    if (!document.fullscreenElement && wrap.classList.contains("is-full")) setFull(false);
+  });
+  document.addEventListener("keydown", (e) => {   // Esc when the browser had no real full screen
+    if (e.key === "Escape" && wrap.classList.contains("is-full") && !document.fullscreenElement) setFull(false);
+  });
+  icon(false);
 }
 
 // ------------------------------------------------------------------ FIRE DOTS (the map's main layer)
 // One ROUND dot per square, in the middle of the square. Only the STRONGEST
-// hotspots are drawn: the places that together have 60% of the fires in the
-// chosen dates (at least 25, at most 1,500 dots), so the map is not covered.
-// The level of a dot = its colour: light (fewer fires) -> dark (more fires),
-// in its own colour: fair count red, MODIS orange, VIIRS purple (the same
-// colours as in the charts). 5 steps, each step has the same number of dots.
-const HOT_SHARE = 0.6, HOT_MIN = 25, HOT_MAX = 1500;
-const HOT_RAMPS = {   // ColorBrewer single-hue ramps, light -> dark
-  harmonized: ["#fcbba1", "#fc9272", "#fb6a4a", "#de2d26", "#a50f15"],   // Reds
-  modis: ["#fdd0a2", "#fdae6b", "#fd8d3c", "#e6550d", "#a63603"],        // Oranges
-  viirs: ["#dadaeb", "#bcbddc", "#9e9ac8", "#756bb1", "#54278f"],        // Purples
+// hotspots are drawn: the places that together have 80% of the fires in the
+// chosen dates (at least 25, at most 5,000 dots), so the map is not covered.
+// The level of a dot = its colour AND its size: light + small (fewer fires)
+// -> dark + big (strong hotspot), in its own colour: fair count red, MODIS
+// orange, VIIRS purple. 5 steps, each step has the same number of dots.
+const HOT_SHARE = 0.8, HOT_MIN = 25, HOT_MAX = 5000;
+const HOT_RAMPS = {   // single-hue ramps, light -> dark (wide range = easy to tell apart)
+  harmonized: ["#fdd5c4", "#fc9272", "#ef3b2c", "#b3111b", "#5c0010"],   // Reds
+  modis: ["#fee3c4", "#fdae6b", "#f16913", "#b84203", "#6b2502"],        // Oranges
+  viirs: ["#e6e3f3", "#bcbddc", "#8c84c3", "#5e3c99", "#2f0f63"],        // Purples
 };
+const HOT_SIZE = [0.7, 0.82, 0.94, 1.06, 1.25];   // dot size per level (x the base size)
 const hotRamp = () => HOT_RAMPS[state.squareMode] || HOT_RAMPS.harmonized;
 let hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0, breaks: [] };
 
@@ -1282,6 +1352,7 @@ function buildSquares() {
 function mapRange() {
   const p = state.period, m = state.c.months;
   if (p.kind === "month") return [p.mi, p.mi];
+  if (p.kind === "frame") return [p.a, p.b];
   if (p.kind === "day") { const i = m.indexOf(p.day.slice(0, 7)); return [i, i]; }
   return rangeIdx();
 }
@@ -1315,18 +1386,18 @@ function styleDots() {
     const show = hot.shown.has(key) && hot.max > 0;
     dot.options.interactive = show;            // hidden dots can't be clicked
     if (!show) { dot.setRadius(0); dot.setStyle({ opacity: 0, fillOpacity: 0, weight: 0 }); continue; }
-    const v = hot.vals.get(key), t = Math.sqrt(v / hot.max);   // 0..1 (for the size)
-    let k = 0;                                               // colour step 0..4
+    const v = hot.vals.get(key);
+    let k = 0;                                               // level 0..4
     while (k < hot.breaks.length && v > hot.breaks[k]) k++;
-    // radius: big enough to see its colour (at least ~5 px across), grows
-    // when you zoom in; a stronger place is a little bigger too
-    const r = Math.max(2.6, Math.min(14, px * (0.28 + 0.3 * t)));
+    // radius: grows when you zoom in, and with the level (strong = big)
+    const base = Math.max(2.7, Math.min(11, px * 0.42));
+    const r = base * HOT_SIZE[k];
     const inside = !state.selCells || state.selCells.has(key);
     dot.setRadius(r);
     // thin light edge: dark dots stay visible on the dark Earth picture
     dot.setStyle({ fillColor: pal[k], color: "#ffffff", weight: 0.6,
       opacity: inside ? 0.55 : 0.05, fillOpacity: inside ? 0.95 : 0.1 });
-    order.push([t, dot]);
+    order.push([v, dot]);
   }
   order.sort((x, y) => x[0] - y[0]).forEach(([, d]) => d.bringToFront());   // big dots on top
 }
@@ -1366,23 +1437,24 @@ function renderMap() {
     styleDots();
   }
 
-  // "The map shows ..." text
+  // Time line above the map
   const p = state.period, m = state.c.months;
-  $("mapPeriod").textContent = (p.kind === "range" ? `${monthShort(m[a])} – ${monthShort(m[b])} (sum)`
-    : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`) + (waiting ? " · loading map details…" : "");
+  $("mapPeriod").textContent = (p.kind === "range" ? `${monthShort(m[a])} – ${monthShort(m[b])} (all)`
+    : p.kind === "frame" ? p.label
+    : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`) + (waiting ? " · loading…" : "");
   $("periodResetBtn").hidden = p.kind === "range";
+  syncSlider();
 
   // Legend: the 5 colour steps (light -> dark) + how many hotspots are shown
   const sq = { harmonized: "fair count of fires", modis: "fires MODIS saw", viirs: "fires VIIRS saw" }[state.squareMode];
-  const dots = hotRamp().map((col) => `<i class="hot-dot" style="--d:11px;background:${col}"></i>`).join("");
+  const dots = hotRamp().map((col, k) => `<i class="hot-dot" style="--d:${Math.round(10 * HOT_SIZE[k])}px;background:${col}"></i>`).join("");
   let leg = off ? `<span class="key">Fire dots hidden</span>`
     : waiting ? `<span class="key">Loading map details…</span>`
-    : `<span class="key">${compact(hot.lo)} <span class="hot-key">${dots}</span> ${compact(hot.max)} ${sq} per place (light = fewer, dark = more)</span>` +
-      `<span class="key">${fmt(hot.shown.size)} strongest hotspots of ${fmt(hot.n)} places with fires · together ${Math.round(hot.share * 100)}% of all fires</span>`;
-  if (state.selCells && !off) leg += `<span class="key">Only places inside your area</span>`;
+    : `<span class="key" title="${compact(hot.lo)} – ${compact(hot.max)} ${sq} per place">weaker <span class="hot-key">${dots}</span> stronger</span>` +
+      `<span class="key">${fmt(hot.shown.size)} hotspots = ${Math.round(hot.share * 100)}% of fires</span>`;
+  if (state.selCells && !off) leg += `<span class="key">inside your area</span>`;
   if (state.fire.on || state.live) {
-    leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS fire dot</span>`;
-    leg += `<span class="key"><span class="dot" style="background:var(--viirs)"></span> VIIRS fire dot</span>`;
+    leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS <span class="dot" style="background:var(--viirs)"></span> VIIRS dot</span>`;
   }
   $("mapLegend").innerHTML = leg;
 
@@ -1393,7 +1465,7 @@ function renderMap() {
 
 // ------------------------------------------------------------------ BACKGROUND + BORDERS
 // Background: NASA Blue Marble (a real picture of the Earth), or the
-// OpenStreetMap street map with place names ("Streets", Map settings).
+// OpenStreetMap street map with place names ("Streets" button on the map).
 const GIBS_WMTS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/";
 let earthTiles = null, streetTiles = null;
 
@@ -1411,7 +1483,7 @@ function setBackground(kind) {
 // Country borders (our own Natural Earth file with the FIRMS names, the same
 // one the globe uses). World: thin lines. A country: a clear ember border,
 // and everything outside it darker, so only its fires stand out.
-let bordersGeo = null, borderLayer = null, focusLayer = null;
+let bordersGeo = null, bordersData = null, borderLayer = null, focusLayer = null, refitOnBorders = false;
 function loadBorders() {
   if (!bordersGeo) bordersGeo = fetch("data/globe_countries.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
   return bordersGeo;
@@ -1419,6 +1491,10 @@ function loadBorders() {
 async function drawBorders() {
   const geo = await loadBorders();
   if (!geo || !map || !state.c) return;
+  if (!bordersData) {
+    bordersData = geo;
+    if (refitOnBorders) fitCountry();   // first time: zoom to the real border
+  }
   if (!borderLayer) {
     borderLayer = L.geoJSON(geo, { pane: "borders", interactive: false,
       style: () => ({ color: "#ffffff", weight: 0.6, opacity: 0.35, fill: false }) }).addTo(map);
@@ -1431,7 +1507,7 @@ async function drawBorders() {
   const ll = (ring) => ring.map(([x, y]) => [y, x]);
   const outside = [[-85, -540], [85, -540], [85, 540], [-85, 540]];     // the whole map...
   const mask = L.polygon([outside, ...polys.map((pg) => ll(pg[0]))],       // ...with the country cut out
-    { pane: "mask", interactive: false, stroke: false, fillColor: "#0b0908", fillOpacity: state.bg === "streets" ? 0.35 : 0.55 });
+    { pane: "mask", interactive: false, stroke: false, fillColor: "#0b0908", fillOpacity: state.bg === "streets" ? 0.45 : 0.68 });
   const rings = polys.map((pg) => pg.map(ll));
   const halo = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: "#000", weight: 4.5, opacity: 0.4 });
   const line = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: state.bg === "streets" ? "#c2410c" : "#ff8a4c", weight: 2, opacity: 1 });
@@ -1455,17 +1531,79 @@ async function squarePopup(key, latlng) {
      ${state.selCells && !state.selCells.has(key) ? '<div class="small">Outside your area</div>' : ""}</div>`).openOn(map);
 }
 
+// The 3 numbers above the map (they are also the buttons). Same monthly
+// series as the cards and the calendar, so all numbers match.
 function renderAreaStats(a, b) {
-  const keys = state.selCells ? [...state.selCells] : [...squares.keys()];
-  // Same monthly series as the cards and the calendar, so all numbers match.
   const s = state.series, sum = [0, 0, 0];
   for (let i = a; i <= b; i++) { sum[0] += s.modis[i]; sum[1] += s.viirs[i] || 0; sum[2] += s.h[i]; }
   const m = state.c.months;
-  $("areaStats").innerHTML =
-    `<b>${state.area ? state.area.label : isWorld() ? "Whole world" : "Whole country"}</b> · ${keys.length.toLocaleString("en-US")} squares with fires<br>` +
-    `${a === b ? monthLong(m[a]) : `${monthShort(m[a])} – ${monthShort(m[b])}`}: ` +
-    `MODIS saw <b>${fmt(sum[0])}</b> · VIIRS saw <b>${m[b] < "2012-01" ? "no data" : fmt(sum[1])}</b> · fair count <b>${fmt(sum[2])}</b>` +
-    (state.area ? `<br><span class="small">${isWorld() ? "Every square uses its own country's exchange rates." : `A drawn area uses ${state.c.name}'s exchange rates.`} Squares count if their centre is inside.</span>` : "");
+  $("mbH").textContent = compact(sum[2]);
+  $("mbM").textContent = compact(sum[0]);
+  $("mbV").textContent = m[b] < "2012-01" ? "no data" : compact(sum[1]);
+  $("areaStats").innerHTML = state.area
+    ? `Numbers for <b>${state.area.label}</b> only. ${isWorld() ? "Every square uses its own country's exchange rates." : `A drawn area uses ${state.c.name}'s exchange rates.`} Squares count if their centre is inside.`
+    : "";
+}
+
+// ---- Play: the map through time
+// Frames: one per year of the chosen dates (one per month if the dates are
+// 2 years or shorter). Slider 0 = all chosen dates added up.
+var playTimer = null;   // var: buildControls may run before this line
+function playFrames() {
+  const [a, b] = rangeIdx(), m = state.c.months, out = [];
+  if (b - a < 24) {
+    for (let i = a; i <= b; i++) out.push({ a: i, b: i, label: monthLong(m[i]) });
+  } else {
+    for (let i = a; i <= b;) {
+      const y = m[i].slice(0, 4);
+      let j = i;
+      while (j + 1 <= b && m[j + 1].slice(0, 4) === y) j++;
+      out.push({ a: i, b: j, label: j - i === 11 ? y : `${y} (${monthShort(m[i])} – ${monthShort(m[j])})` });
+      i = j + 1;
+    }
+  }
+  return out;
+}
+function syncSlider() {
+  const fr = playFrames(), sl = $("playSlider"), p = state.period;
+  sl.max = fr.length;
+  let v = 0;
+  if (p.kind === "frame") v = p.n;
+  else if (p.kind === "month") v = fr.findIndex((f) => f.a <= p.mi && p.mi <= f.b) + 1;
+  sl.value = v;
+  sl.style.setProperty("--p", fr.length ? (v / fr.length) * 100 + "%" : "0%");
+}
+function showFrame(n) {
+  const fr = playFrames();
+  state.period = n > 0 && fr[n - 1] ? { kind: "frame", n, ...fr[n - 1] } : { kind: "range" };
+  renderMap();
+}
+async function startPlay() {
+  const c = state.c;
+  if (!(await needDetail()) || state.c !== c) return;   // every frame needs the full squares
+  const fr = playFrames();
+  if (fr.length < 2) { toast("Choose longer dates to play them"); return; }
+  let n = state.period.kind === "frame" ? state.period.n : 0;
+  if (n >= fr.length) n = 0;
+  showFrame(n + 1);
+  playTimer = setInterval(() => {
+    const k = state.period.kind === "frame" ? state.period.n + 1 : 1;
+    if (k > playFrames().length) { stopPlay(); return; }
+    showFrame(k);
+  }, reduceMotion ? 1600 : 1000);
+  playButton();
+}
+function stopPlay() {
+  if (!playTimer) return;
+  clearInterval(playTimer);
+  playTimer = null;
+  playButton();
+}
+function playButton() {
+  $("playBtn").innerHTML = playTimer
+    ? '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg> Pause'
+    : '<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 5v14l12-7z"/></svg> Play';
+  $("playBtn").setAttribute("aria-pressed", String(!!playTimer));
 }
 
 // ---- Area (drawn shape or typed box)
@@ -1727,6 +1865,7 @@ function calTip(el) {
     const el = e.target.closest(".c");
     if (!el || el.dataset.i === "") return;
     const m = el.dataset.m;
+    stopPlay();
     state.period = { kind: "month", mi: +el.dataset.i };
     // The same month also drives "this month vs normal" and the satellite picture date.
     state.normalMonth = +m.slice(5, 7);
