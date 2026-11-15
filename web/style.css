@@ -68,6 +68,27 @@
   --radius: 6px;
   --radius-sm: 4px;
   --ease: cubic-bezier(.2, .8, .2, 1);
+
+  /* ---- Design tokens (redesign): spacing, corners, shadows, text sizes.
+     Change them here and the whole page follows. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 48px;
+  --radius-card: 16px;     /* cards */
+  --radius-ctrl: 10px;     /* map, pop-ups, small boxes */
+  --radius-pill: 999px;    /* badges */
+  --card-edge: rgba(60, 40, 20, .05);
+  --shadow-card: 0 1px 2px rgba(60, 40, 20, .05), 0 8px 24px rgba(60, 40, 20, .07);
+  --shadow-card-hover: 0 2px 4px rgba(60, 40, 20, .06), 0 16px 36px rgba(60, 40, 20, .12);
+  --fs-title: clamp(30px, 3.6vw, 46px);   /* the one big title */
+  --fs-section: 19px;                      /* section titles */
+  --fs-body: 15px;                         /* normal text */
+  --fs-small: 13px;                        /* short lines, notes */
+  --fs-num: 30px;                          /* big numbers (mono font) */
 }
 
 /* Dark mode: when the computer is in dark mode (and the user did not pick light)… */
@@ -90,6 +111,9 @@
     --chip: #24201c;
     --shadow: none;
     --shadow-lift: 0 6px 18px rgba(0, 0, 0, .35);
+    --card-edge: rgba(255, 255, 255, .04);
+    --shadow-card: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .32);
+    --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .45);
     --ember: #ff6a1f;
     --ember-text: #ff8a4c;     /* ember for small text on charcoal */
     --ember-soft: #ffb27a;
@@ -133,6 +157,9 @@
   --chip: #24201c;
   --shadow: none;
   --shadow-lift: 0 6px 18px rgba(0, 0, 0, .35);
+  --card-edge: rgba(255, 255, 255, .04);
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .32);
+  --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .45);
   --ember: #ff6a1f;
   --ember-text: #ff8a4c;     /* ember for small text on charcoal */
   --ember-soft: #ffb27a;
@@ -1140,3 +1167,252 @@ html.map-full-open { overflow: hidden; }
 html.report .map-top, html.report .map-more, html.report .area-note { display: none !important; }
 html.report .map-wrap .leaflet-top { top: 0; }
 html.report .map-legend { font-size: 8px; padding: 2px 6px; max-width: 100%; }
+
+/* ================================================================
+   REDESIGN (Nov 2026): calmer, more premium look. Uses the design
+   tokens at the top of this file (space, radius, shadow, type sizes).
+   Short summary on top, the map right after it, "Key numbers" under
+   the calendar, long texts behind "More", accordions at the bottom.
+   ================================================================ */
+body { font-size: var(--fs-body); }
+main { gap: var(--space-6); padding-top: var(--space-5); }
+.grid-2, .grid-2.even { gap: var(--space-6); }
+
+/* cards: soft shadow, round corners, (almost) no borders */
+.card {
+  border-radius: var(--radius-card); border: 1px solid var(--card-edge);
+  box-shadow: var(--shadow-card); padding: var(--space-5);
+  transition: box-shadow .3s var(--ease), transform .3s var(--ease), opacity .7s var(--ease);
+}
+.controls.filters { border-radius: var(--radius-card); }
+#map { border-radius: var(--radius-ctrl); }
+.map-wrap.is-full #map { border-radius: 0; }
+.note-box { border-radius: var(--radius-ctrl); border: 0; }
+
+/* section headers: number badge + title + one short line */
+.card-head, .sec-head { display: flex; justify-content: space-between; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; margin-bottom: var(--space-4); }
+.sec-title { min-width: 0; }
+.sec-title h2, .acc-title h2 { font-size: var(--fs-section); font-weight: 650; letter-spacing: -.015em; }
+h2 .num {
+  width: 28px; height: 28px; border-radius: 9px; font-size: 13px; font-family: var(--font-mono);
+  background: var(--ember-wash); color: var(--ember-text); font-weight: 600; flex: none;
+}
+.sec-sub { margin: 4px 0 0 36px; font-size: var(--fs-small); color: var(--muted); line-height: 1.45; }
+.card-head .hint { font-size: var(--fs-small); }
+
+/* ---- 1. the short summary on top (not a card: open and light) */
+.hero {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: var(--space-4) var(--space-6);
+  align-items: start; padding: var(--space-3) var(--space-1) 0; border: 0; background: none; box-shadow: none;
+}
+.hero h1 { font-size: var(--fs-title); line-height: 1.08; margin: 0; letter-spacing: -.03em; font-weight: 700; }
+.hero-dates { margin-top: var(--space-2); font-family: var(--font-mono); font-size: 14px; color: var(--muted); }
+.hero #summary { margin: var(--space-3) 0 0; font-size: 17px; color: var(--ink2); max-width: 60ch; }
+.why { margin-top: var(--space-2); }
+.why > summary {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  font-size: var(--fs-small); color: var(--ember-text); font-weight: 600; padding: 4px 0;
+}
+.why > summary::-webkit-details-marker { display: none; }
+.why > summary::after { content: "▾"; transition: transform .25s var(--ease); }
+.why[open] > summary::after { transform: rotate(180deg); }
+.why > p { margin: var(--space-2) 0 0; font-size: 14px; color: var(--ink2); max-width: 64ch; animation: fadeUp .35s var(--ease) both; }
+
+.rate-wrap { position: relative; z-index: 700; padding-top: var(--space-2); }
+.rate-badge {
+  display: inline-flex; align-items: center; gap: 10px; white-space: nowrap;
+  padding: 9px 16px; border-radius: var(--radius-pill); font-size: 14px; color: var(--ink);
+  background: var(--ember-wash); border: 1px solid color-mix(in srgb, var(--ember) 28%, transparent);
+  transition: background .2s, transform .1s;
+}
+.rate-badge b { font-size: 16px; font-weight: 600; }
+.rate-badge svg { color: var(--ember-text); }
+.rate-badge:hover { background: color-mix(in srgb, var(--ember) 18%, transparent); }
+.rate-badge:active { transform: translateY(1px); }
+.rate-badge .ex-ring { width: 14px; height: 14px; border-width: 2.5px; flex: none; }
+.rate-pop {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; width: min(360px, calc(100vw - 32px));
+  padding: var(--space-4); border-radius: var(--radius-ctrl); background: var(--card-solid);
+  box-shadow: var(--shadow-card-hover); border: 1px solid var(--card-edge); animation: fadeUp .25s var(--ease) both;
+}
+.rate-pop .ex-dots { justify-content: flex-start; min-height: 0; gap: 5px; margin-bottom: var(--space-3); flex-wrap: wrap; }
+.rate-pop .ex-dot { width: 14px; height: 14px; }
+.rate-pop .ex-cap { max-width: none; text-align: left; font-size: var(--fs-small); line-height: 1.5; color: var(--ink2); }
+
+/* ---- 2. Key numbers (under the calendar) */
+.keynums { display: flex; flex-direction: column; gap: var(--space-4); }
+.keynums .sec-head { margin-bottom: 0; }
+.kpis { gap: var(--space-4); }
+.kpi { display: block; padding: 20px 22px; overflow: hidden; }
+.kpi::before {   /* small colour mark: which kind of number this is */
+  content: ""; position: absolute; left: 22px; top: 0; width: 28px; height: 3px; border-radius: 0 0 3px 3px; background: var(--c, var(--ember));
+}
+.kpi .t { font-size: 12.5px; color: var(--muted); margin-bottom: var(--space-2); }
+.kpi .n { font-family: var(--font-mono); font-size: var(--fs-num); font-weight: 600; line-height: 1.1; letter-spacing: -.03em; }
+.kpi .n.small-n { font-size: 19px; line-height: 1.35; }
+.kpi .s { margin-top: 6px; font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.kpi:hover { box-shadow: var(--shadow-card-hover); transform: translateY(-2px); }
+.kpi.reveal:not(.in) { transform: translateY(18px); }
+.keynums .row-label {
+  margin: var(--space-2) 2px 0; font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+}
+
+/* ---- long texts: one line + "More" */
+details.more { margin-top: var(--space-4); }
+details.more > summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: baseline; gap: var(--space-3);
+  padding: 10px 14px; border-radius: var(--radius-ctrl); background: var(--chip); font-size: var(--fs-small); color: var(--ink2);
+  transition: background .2s;
+}
+details.more > summary::-webkit-details-marker { display: none; }
+details.more > summary:hover { background: color-mix(in srgb, var(--chip) 70%, var(--line)); }
+.more-sum b { color: var(--ink); }
+.more-btn { flex: none; color: var(--ember-text); font-weight: 600; }
+.more-btn::after { content: " ▾"; display: inline-block; transition: transform .25s var(--ease); }
+details.more[open] .more-btn::after { transform: rotate(180deg); }
+.more-body { padding: var(--space-3) 14px 0; font-size: var(--fs-small); line-height: 1.6; color: var(--ink2); animation: fadeUp .3s var(--ease) both; }
+.more-body b { color: var(--ink); }
+
+/* ---- accordions at the bottom: How / Limits / Sources */
+.acc { padding: 0; }
+.acc > details > summary {
+  list-style: none; cursor: pointer; display: flex; justify-content: space-between; align-items: center; gap: var(--space-3);
+  padding: 18px var(--space-5); border-radius: var(--radius-card);
+}
+.acc > details > summary::-webkit-details-marker { display: none; }
+.acc-title { display: flex; align-items: baseline; gap: 4px var(--space-3); flex-wrap: wrap; }
+.acc-title .sec-sub { margin: 0; }
+.acc-icon {
+  flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--chip); position: relative; transition: transform .3s var(--ease), background .2s;
+}
+.acc-icon::before, .acc-icon::after { content: ""; position: absolute; left: 50%; top: 50%; width: 12px; height: 2px; margin: -1px 0 0 -6px; border-radius: 2px; background: var(--ink2); }
+.acc-icon::after { transform: rotate(90deg); transition: transform .3s var(--ease); }
+.acc > details[open] .acc-icon { background: var(--ember-wash); }
+.acc > details[open] .acc-icon::after { transform: rotate(0deg); }
+.acc > details > summary:hover .acc-icon { background: var(--ember-wash); }
+.acc > details > :not(summary) { margin: 0 var(--space-5) var(--space-5); animation: fadeUp .35s var(--ease) both; }
+
+/* ---- 4. animations: page load (stagger 80 ms) + scroll reveal */
+@keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.load-in { animation: fadeUp .6s var(--ease) both; animation-delay: calc(var(--i, 0) * 80ms); }
+.reveal { transition-delay: var(--d, 0ms); }
+
+/* ---- sizes */
+@media (max-width: 900px) {
+  .hero { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  .rate-pop { left: 0; right: auto; }
+}
+@media (max-width: 640px) {
+  main { gap: var(--space-5); }
+  .card { padding: var(--space-4); }
+  .acc > details > summary { padding: 16px var(--space-4); }
+  .acc > details > :not(summary) { margin: 0 var(--space-4) var(--space-4); }
+  .sec-sub { margin-left: 0; }
+  .rate-badge { white-space: normal; }
+}
+
+/* ---- print report: same one page, in this order: summary, key numbers, map + calendar */
+html.report main > * { order: 5; }
+html.report main > .report-head { order: 0; }
+html.report main > #overview { order: 1; }
+html.report main > #keynums { order: 2; }
+html.report main > #where, html.report main > #calendar { order: 3; }
+html.report main > .report-foot { order: 9; }
+html.report .why, html.report .rate-pop, html.report .sec-sub, html.report details.more,
+html.report .keynums .sec-head { display: none !important; }
+html.report .hero { padding: 0; gap: 8px; grid-template-columns: minmax(0, 1fr) auto; }
+html.report .hero-dates { font-size: 10px; margin-top: 2px; }
+html.report .rate-wrap { padding: 0; }
+html.report .rate-badge { font-size: 10px; padding: 3px 9px; gap: 5px; }
+html.report .rate-badge b { font-size: 11px; }
+html.report .rate-badge svg { display: none; }
+html.report .keynums { gap: 5px; }
+html.report .kpi { box-shadow: none; transform: none; }
+html.report .kpi::before { display: none; }
+html.report .kpi .t { margin-bottom: 1px; }
+html.report .kpi .s { margin-top: 1px; font-size: 8px; }
+html.report .keynums .row-label { font-size: 8px; margin: 0; }
+html.report .card { border-radius: 8px; }
+
+/* ================================================================
+   ANIMATIONS + COMPACT PICKER (redesign parts 4 and 5).
+   Only opacity and transform move (smooth). Reduce motion = none.
+   ================================================================ */
+
+/* ---- hover: cards lift a little; buttons press down */
+.kpi, #proof > .card, #day > .card, .acc { transition: transform .25s var(--ease), box-shadow .25s var(--ease), opacity .7s var(--ease); }
+.kpi:hover, #proof > .card:hover, #day > .card:hover, .acc:hover { transform: translateY(-3px); box-shadow: var(--shadow-card-hover); }
+.play, .ghost-btn, .mode-btn, .rate-badge, .share-main, .date-btn, .seg button, .text-btn, .globe-btn,
+.map-full-btn, .pick-bar button, .icon-btn, .more > summary, .acc > details > summary { transition: transform .12s var(--ease), background-color .2s, border-color .2s, color .2s, opacity .2s; }
+.play:active, .ghost-btn:active, .mode-btn:active, .rate-badge:active, .share-main:active, .date-btn:active,
+.seg button:active, .text-btn:active, .globe-btn:active, .map-full-btn:active, .pick-bar button:active,
+.icon-btn:active, .more > summary:active { transform: scale(.97); }
+
+/* ---- fire calendar: the months appear in a small wave (left -> right, top -> bottom) */
+@keyframes calIn { from { opacity: 0; transform: translateY(6px) scale(.85); } }
+.cal.wave .c { animation: calIn .45s var(--ease) backwards; animation-delay: var(--w, 0ms); }
+#calendar:not(.in) .cal.wave .c { animation-play-state: paused; }   /* waits until you scroll to it */
+
+/* ---- toggles close smoothly (app.js adds "closing" for 0.18 s) */
+@keyframes fadeAway { to { opacity: 0; transform: translateY(-6px); } }
+details.closing > :not(summary) { animation: fadeAway .18s var(--ease) both !important; }
+details.more.closing .more-btn::after, details.why.closing > summary::after { transform: none; }
+.acc > details.closing .acc-icon::after { transform: rotate(90deg); }
+
+/* ---- place or dates change: fade out and back in (opacity only: no jump) */
+main > section { transition: opacity .35s var(--ease); }
+main.changing > section:not(.report-only) { opacity: .25 !important; transition: opacity .14s linear; }
+
+/* ---- the picker: no longer sticky; a pill bar takes over when scrolled */
+.controls.filters { position: relative; top: auto; }
+.pick-slot { position: relative; z-index: 900; }
+.pick-bar {
+  position: fixed; z-index: 1100; top: 76px; left: 50%;
+  opacity: 0; transform: translate(-50%, -14px) scale(.94); pointer-events: none;
+  transition: opacity .25s var(--ease), transform .25s var(--ease);
+}
+.pick-bar.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+.pick-bar.show.open { opacity: 0; transform: translate(-50%, -8px) scale(.96); pointer-events: none; }
+.pick-bar button {
+  display: flex; align-items: center; gap: 10px; max-width: min(640px, calc(100vw - 24px));
+  padding: 7px 7px 7px 16px; border-radius: var(--radius-pill); font-size: 14px; font-weight: 600; color: var(--ink);
+  background: color-mix(in srgb, var(--card-solid) 90%, transparent); border: 1px solid var(--line);
+  box-shadow: var(--shadow-card-hover); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.pick-flame { color: var(--ember); flex: none; }
+.pick-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.pick-change { flex: none; padding: 6px 14px; border-radius: var(--radius-pill); background: var(--ember); color: var(--on-ember); font-size: 12.5px; }
+.pick-bar button:hover .pick-change { background: var(--ember-soft); }
+.pick-bar button:focus-visible { outline: 2px solid var(--ember); outline-offset: 3px; }
+
+/* the full picker as a panel under the bar */
+@keyframes panelIn { from { opacity: 0; transform: translateX(-50%) translateY(-10px) scale(.98); } to { opacity: 1; transform: translateX(-50%); } }
+.controls.filters.as-panel {
+  position: fixed; z-index: 1150; top: 72px; left: 50%; transform: translateX(-50%);
+  width: min(1100px, calc(100vw - 24px)); box-shadow: var(--shadow-card-hover), 0 0 0 100vmax rgba(0, 0, 0, .25);
+  animation: panelIn .25s var(--ease) both; outline: none;
+}
+
+@media (max-width: 640px) {
+  .pick-bar { left: 12px; right: 12px; top: 70px; transform: translateY(-14px) scale(.96); }
+  .pick-bar.show { transform: none; }
+  .pick-bar.show.open { transform: translateY(-8px); }
+  .pick-bar button { width: 100%; max-width: none; padding: 9px 8px 9px 16px; }
+  .pick-text { flex: 1; text-align: left; }
+  .pick-change { padding: 8px 16px; }
+  .controls.filters.as-panel { top: 64px; max-height: calc(100vh - 76px); overflow-y: auto; }
+}
+
+/* ---- no motion: everything just appears */
+@media (prefers-reduced-motion: reduce) {
+  .cal.wave .c, .controls.filters.as-panel, details.closing > :not(summary) { animation: none !important; }
+  .pick-bar, main > section, .kpi, #proof > .card, #day > .card, .acc { transition: none !important; }
+  .kpi:hover, #proof > .card:hover, #day > .card:hover, .acc:hover { transform: none; }
+}
+
+/* ---- print: no bar, no animation */
+html.report .pick-bar, html.report .pick-slot { display: none !important; }
+@media print {
+  .pick-bar { display: none !important; }
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

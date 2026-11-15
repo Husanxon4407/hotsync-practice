@@ -28,13 +28,13 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115n">
+<link rel="stylesheet" href="style.css?v=20261115p">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
 
 <!-- ============ HEADER ============ -->
-<header class="top">
+<header class="top load-in">
   <img class="logo" src="assets/capella-mark.png" alt="Capella logo">
   <div>
     <div class="brand"><span class="prism-text">HotSync</span></div>
@@ -44,14 +44,24 @@
     <a href="#overview">Overview</a>
     <a href="#where">Map</a>
     <a href="#calendar">Calendar</a>
+    <a href="#keynums">Numbers</a>
     <a href="#proof">Proof</a>
     <a href="#day">Day</a>
-    <a href="#numbers">Data</a>
+    <a href="#numbers">Table</a>
     <a href="#how">How</a>
     <a href="#sources">Sources</a>
   </nav>
   <button class="icon-btn" id="themeBtn" type="button" aria-label="Change theme"></button>
 </header>
+
+<!-- Small bar that replaces the picker when it is scrolled away (app.js: setupPickBar) -->
+<div class="pick-bar" id="pickBar" aria-hidden="true">
+  <button type="button" id="pickBarBtn" tabindex="-1" aria-expanded="false" aria-label="Change place or dates">
+    <svg class="pick-flame" viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M12 2c1.2 4.3 5.5 6 5.5 11a5.5 5.5 0 0 1-11 0c0-2.2 1-3.8 2.2-5 .3 2.2 1.4 3.3 2.6 3.3C10.6 8.6 10.9 5.4 12 2z"/></svg>
+    <span class="pick-text" id="pickBarText">…</span>
+    <span class="pick-change">Change</span>
+  </button>
+</div>
 
 <main>
   <div id="error" role="alert"></div>
@@ -67,6 +77,8 @@
   </section>
 
   <!-- ============ CONTROL BOX: 3 steps (Place · Dates · Share) drive everything below ============ -->
+  <!-- The slot keeps the picker's height when it opens as a panel (no jump) -->
+  <div class="pick-slot" id="pickSlot">
   <section class="card controls filters" aria-label="Choose a place and dates, then share">
     <div class="fsteps">
       <!-- Step 1: Place (list: js/place-picker.js, globe: js/globe-picker.js) -->
@@ -116,76 +128,31 @@
       <p class="howto">Pick a country and dates. Click a month or draw on the map to look closer. Share sends this exact view.</p>
     </div>
   </section>
+  </div>
 
-  <!-- ============ HERO: the story in one sentence ============ -->
-  <section id="overview" class="card prism hero reveal">
-    <div>
-      <div class="kicker">
-        <span class="chip">Place <b id="heroArea">…</b></span>
-        <span class="chip">Dates <b class="mono" id="heroRange">…</b></span>
-        <span class="chip">Data <b>MODIS + VIIRS · NASA FIRMS</b></span>
+  <!-- ============ SUMMARY: short title, dates, one sentence ============ -->
+  <section id="overview" class="hero">
+    <div class="hero-main">
+      <h1 id="heroTitle" class="load-in">Loading the fires…</h1>
+      <div class="hero-dates load-in" id="heroRange">…</div>
+      <p id="summary" class="load-in" aria-live="polite"></p>
+      <details class="why load-in">
+        <summary>Why "fair count"?</summary>
+        <p>Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. HotSync converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
+      </details>
+    </div>
+    <!-- The exchange rate as a small badge; the full explanation opens on click -->
+    <div class="rate-wrap load-in">
+      <button type="button" class="rate-badge" id="rateBadge" aria-expanded="false" aria-controls="ratePop"
+              title="The exchange rate: click for more">
+        <span class="ex-ring" aria-hidden="true"></span>
+        <span>1 MODIS fire = <b class="mono" id="exNum">…</b> VIIRS fires</span>
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.5"/></svg>
+      </button>
+      <div class="rate-pop" id="ratePop" hidden>
+        <div class="ex-dots" id="exDots" aria-hidden="true"></div>
+        <div class="ex-cap" id="exCap"></div>
       </div>
-      <h1 id="heroTitle">Loading the fires…</h1>
-      <p id="summary" aria-live="polite"></p>
-      <p class="what"><b>What is this?</b> Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. HotSync converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
-    </div>
-    <div class="exchange" aria-live="polite">
-      <div class="eq">
-        <span class="ex-ring" title="1 fire seen by MODIS"></span>
-        <span class="ex-sign">=</span>
-        <span class="ex-dots" id="exDots"></span>
-      </div>
-      <div class="ex-num" id="exNum">…</div>
-      <div class="ex-cap" id="exCap">fires seen by VIIRS for every 1 fire seen by MODIS (the "exchange rate")</div>
-    </div>
-  </section>
-
-  <!-- ============ SUMMARY CARDS ============ -->
-  <section class="kpis" aria-label="Key numbers">
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--harm)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 2 1.3 3 2.3 3C11 9 11 6 12 3z"/></svg></div>
-      <div><div class="t">Fires (fair count) <button class="q" type="button" data-tip="All fires in your area and dates, counted the same way for every year (scientists call this 'harmonized'), so old and new years are fair to compare.">?</button></div>
-      <div class="n" id="kTotal">…</div><div class="s" id="kTotalS"></div></div>
-    </div>
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--r4)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
-      <div><div class="t">Busiest month <button class="q" type="button" data-tip="The month of the year with the most fires (fair count) on average, in your dates. A month that is not finished yet is left out.">?</button></div>
-      <div class="n" id="kBusy">…</div><div class="s" id="kBusyS"></div></div>
-    </div>
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--brand)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19V5M4 19h16M8 15l3-4 3 2 5-6"/></svg></div>
-      <div><div class="t">Top 3 years <button class="q" type="button" data-tip="The 3 full years with the most fires (fair count) in your dates. * = years with only the Terra satellite (before July 2002): the least certain years.">?</button></div>
-      <div class="n small-n" id="kTop">…</div><div class="s" id="kTopS"></div></div>
-    </div>
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--viirs)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/></svg></div>
-      <div><div class="t">Last month in your range vs normal <button class="q" type="button" data-tip="The last month of your dates compared with its normal: the middle value of the same month in 2001–2025. If the month is not finished yet, we compare only its finished days with the same days of past years.">?</button></div>
-      <div class="n" id="kLatest">…</div><div class="s" id="kLatestS"></div></div>
-    </div>
-  </section>
-
-  <!-- ============ REAL FIRE NUMBERS (like the first prototype) ============ -->
-  <div class="row-label">Real fire numbers: what the satellites counted (after cleaning, no conversion)</div>
-  <section class="kpis" aria-label="Real fire numbers">
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--modis)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg></div>
-      <div><div class="t">Fires MODIS saw <button class="q" type="button" data-tip="MODIS: the older satellite camera (on Terra from 2000 and Aqua from 2002). Its pixels are big (about 1 km), so it misses small fires.">?</button></div>
-      <div class="n" id="kModis">…</div><div class="s" id="kModisS"></div></div>
-    </div>
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--viirs)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 3c1 4 5 5.5 5 10a5 5 0 0 1-10 0c0-2 1-3.5 2-4.5.3 2 1.3 3 2.3 3C11 9 11 6 12 3z"/></svg></div>
-      <div><div class="t">Fires VIIRS saw <button class="q" type="button" data-tip="VIIRS: the newer satellite camera (data from 20 Jan 2012; from Feb 2012 the fair count is simply what VIIRS saw). Its pixels are small (about 375 m), so it sees many small fires that MODIS misses.">?</button></div>
-      <div class="n" id="kViirs">…</div><div class="s" id="kViirsS"></div></div>
-    </div>
-    <div class="card lift prism-hover kpi clickable reveal" id="kBusyDayCard" role="button" tabindex="0" style="--c:var(--r4)" title="Click to open this day">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/></svg></div>
-      <div><div class="t">Busiest day <button class="q" type="button" data-tip="The single day with the most fires (fair count) in your dates. Click the card to open that day.">?</button></div>
-      <div class="n small-n" id="kBusyDay">…</div><div class="s" id="kBusyDayS"></div></div>
-    </div>
-    <div class="card lift prism-hover kpi reveal" style="--c:var(--harm)">
-      <div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div>
-      <div><div class="t">Fire strength <button class="q" type="button" data-tip="Fire radiative power (FRP): how much heat a fire gives off, in megawatts, per detection. Higher = bigger or hotter fires on average.">?</button></div>
-      <div class="n" id="kFrp">…</div><div class="s" id="kFrpS"></div></div>
     </div>
   </section>
 
@@ -195,8 +162,10 @@
        full screen); a small legend sits in the bottom-left corner. -->
   <section id="where" class="card reveal map-card">
     <div class="card-head">
-      <h2><span class="num">1</span> Where the fires were</h2>
-      <span class="hint" id="mapHint">Click a dot for its numbers · draw an area with the tools on the left</span>
+      <div class="sec-title">
+        <h2><span class="num">1</span> Where the fires were</h2>
+        <p class="sec-sub" id="mapHint">The main hotspots. Click a dot for its numbers, or draw an area with the tools on the left.</p>
+      </div>
     </div>
 
     <div class="map-wrap" id="mapWrap">
@@ -288,20 +257,76 @@
   <!-- ============ FIRE CALENDAR ============ -->
   <section id="calendar" class="card reveal">
     <div class="card-head">
-      <h2><span class="num">2</span> <span id="calTitle">Fire calendar</span></h2>
+      <div class="sec-title">
+        <h2><span class="num">2</span> <span id="calTitle">Fire calendar</span></h2>
+        <p class="sec-sub">Every month since 2001. Click a month to see it on the map.</p>
+      </div>
       <div class="seg" id="calSeg" role="group" aria-label="Calendar mode"><span class="thumb"></span></div>
     </div>
-    <div class="small" id="calNote" style="margin:-4px 0 12px"></div>
     <div class="cal-scroll"><div class="cal" id="cal" role="grid" aria-label="Fire calendar: years by months"></div></div>
     <div class="scale" id="scale"></div>
+    <details class="more">
+      <summary><span class="more-sum" id="calSum"></span><span class="more-btn">More</span></summary>
+      <div class="more-body" id="calNote"></div>
+    </details>
+  </section>
+
+  <!-- ============ KEY NUMBERS (the 8 cards, under the calendar) ============ -->
+  <section id="keynums" class="keynums" aria-labelledby="keyTitle">
+    <div class="sec-head">
+      <div class="sec-title">
+        <h2 id="keyTitle"><span class="num" aria-hidden="true">★</span> Key numbers</h2>
+        <p class="sec-sub">For your place and dates.</p>
+      </div>
+    </div>
+    <div class="kpis" aria-label="Main numbers">
+      <div class="card kpi reveal" style="--c:var(--ember)">
+        <div class="t">Fires (fair count) <button class="q" type="button" data-tip="All fires in your place and dates, counted the same way for every year.">?</button></div>
+        <div class="n" id="kTotal">…</div><div class="s" id="kTotalS"></div>
+      </div>
+      <div class="card kpi reveal" style="--c:var(--r4)">
+        <div class="t">Busiest month <button class="q" type="button" data-tip="The month with the most fires on average. Unfinished months are left out.">?</button></div>
+        <div class="n" id="kBusy">…</div><div class="s" id="kBusyS"></div>
+      </div>
+      <div class="card kpi reveal" style="--c:var(--r3)">
+        <div class="t">Top 3 years <button class="q" type="button" data-tip="The 3 full years with the most fires. * = Terra only (before July 2002), least certain.">?</button></div>
+        <div class="n small-n" id="kTop">…</div><div class="s" id="kTopS"></div>
+      </div>
+      <div class="card kpi reveal" style="--c:var(--r5)">
+        <div class="t">Last month vs normal <button class="q" type="button" data-tip="The last month of your dates vs the middle value of the same month in 2001–2025.">?</button></div>
+        <div class="n" id="kLatest">…</div><div class="s" id="kLatestS"></div>
+      </div>
+    </div>
+
+    <div class="row-label">What the satellites counted</div>
+    <div class="kpis" aria-label="What the satellites counted">
+      <div class="card kpi reveal" style="--c:var(--modis)">
+        <div class="t">Fires MODIS saw <button class="q" type="button" data-tip="The older camera (since 2000). Big pixels (1 km), so it misses small fires.">?</button></div>
+        <div class="n" id="kModis">…</div><div class="s" id="kModisS"></div>
+      </div>
+      <div class="card kpi reveal" style="--c:var(--viirs)">
+        <div class="t">Fires VIIRS saw <button class="q" type="button" data-tip="The newer camera (since 20 Jan 2012). Small pixels (375 m), so it sees more small fires.">?</button></div>
+        <div class="n" id="kViirs">…</div><div class="s" id="kViirsS"></div>
+      </div>
+      <div class="card kpi clickable reveal" id="kBusyDayCard" role="button" tabindex="0" style="--c:var(--r4)" title="Click to open this day">
+        <div class="t">Busiest day <button class="q" type="button" data-tip="The day with the most fires in your dates. Click the card to open it.">?</button></div>
+        <div class="n small-n" id="kBusyDay">…</div><div class="s" id="kBusyDayS"></div>
+      </div>
+      <div class="card kpi reveal" style="--c:var(--harm)">
+        <div class="t">Fire strength <button class="q" type="button" data-tip="Average heat per detection (fire radiative power, in megawatts).">?</button></div>
+        <div class="n" id="kFrp">…</div><div class="s" id="kFrpS"></div>
+      </div>
+    </div>
   </section>
 
   <!-- ============ PROOF + THIS MONTH VS NORMAL ============ -->
   <section id="proof" class="grid-2 even">
     <div class="card reveal">
       <div class="card-head">
-        <h2><span class="num">3</span> Proof: does the exchange rate work?</h2>
-        <span class="hint">2012–2025, both satellites flying</span>
+        <div class="sec-title">
+          <h2><span class="num">3</span> Proof: does the exchange rate work?</h2>
+          <p class="sec-sub">2012–2025, when both satellites flew.</p>
+        </div>
       </div>
       <div class="chartbox"><canvas id="proofChart" role="img" aria-label="Line chart, 2012 to 2025: fires MODIS saw, fires VIIRS saw, and MODIS converted with the exchange rate. The converted line follows the VIIRS line."></canvas></div>
       <div class="legend">
@@ -309,11 +334,17 @@
         <span class="key"><span class="line-key" style="background:var(--viirs);height:3px"></span> VIIRS saw</span>
         <span class="key"><span class="dash"></span> MODIS converted (rate × MODIS)</span>
       </div>
-      <div class="note-box" id="proofNote" style="margin-top:12px"></div>
+      <details class="more">
+        <summary><span class="more-sum" id="proofSum"></span><span class="more-btn">More</span></summary>
+        <div class="more-body" id="proofNote"></div>
+      </details>
     </div>
     <div class="card reveal">
       <div class="card-head">
-        <h2><span class="num">4</span> This month vs normal</h2>
+        <div class="sec-title">
+          <h2><span class="num">4</span> This month vs normal</h2>
+          <p class="sec-sub">One month in every year. Click a bar to pick a year.</p>
+        </div>
         <div class="ctrl">
           <label class="lbl" for="normalMonth">Month</label>
           <select id="normalMonth"></select>
@@ -326,7 +357,10 @@
         <span class="key"><span class="dash" style="border-color:var(--ink)"></span> normal (middle value of 2001–2025)</span>
         <span class="key"><span class="sw" style="background:color-mix(in srgb, var(--harm) 25%, transparent)"></span> half of all years fall in this band</span>
       </div>
-      <div class="note-box" id="normalNote" style="margin-top:12px"></div>
+      <details class="more">
+        <summary><span class="more-sum" id="normalSum"></span><span class="more-btn">More</span></summary>
+        <div class="more-body" id="normalNote"></div>
+      </details>
     </div>
   </section>
 
@@ -334,7 +368,10 @@
   <section id="day" class="grid-2 even">
     <div class="card reveal day-card" aria-live="polite">
       <div class="card-head" style="margin-bottom:0">
-        <h2><span class="num">5</span> One day</h2>
+        <div class="sec-title">
+          <h2><span class="num">5</span> One day</h2>
+          <p class="sec-sub">Fires on a single day.</p>
+        </div>
         <div class="ctrl">
           <button class="ghost-btn" id="dayPrev" type="button" aria-label="Previous day">◀</button>
           <label class="sr-only" for="dayInput">Day</label>
@@ -361,7 +398,10 @@
   <!-- ============ TABLE + DOWNLOADS ============ -->
   <section id="numbers" class="card reveal">
     <div class="card-head">
-      <h2><span class="num">6</span> Monthly numbers for your selection</h2>
+      <div class="sec-title">
+        <h2><span class="num">6</span> Monthly numbers</h2>
+        <p class="sec-sub">Every month of your selection, ready to download.</p>
+      </div>
       <div class="ctrl">
         <button class="play" id="dlMonthly" type="button">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg>
@@ -379,8 +419,9 @@
   </section>
 
   <!-- ============ HOW IT WORKS ============ -->
-  <section id="how" class="card reveal">
-    <div class="card-head"><h2>How HotSync works</h2><span class="hint" id="howCountry"></span></div>
+  <section id="how" class="card acc reveal">
+    <details>
+    <summary class="acc-head"><span class="acc-title"><h2>How HotSync works</h2><span class="sec-sub" id="howCountry"></span></span><span class="acc-icon" aria-hidden="true"></span></summary>
     <div class="steps">
       <div class="step" style="--c:var(--modis)">
         <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg></div>
@@ -420,11 +461,13 @@
         <div id="validBox"></div>
       </div>
     </div>
+    </details>
   </section>
 
   <!-- ============ LIMITS ============ -->
-  <section id="limits" class="card reveal">
-    <div class="card-head"><h2>Limits: what HotSync can't tell you</h2></div>
+  <section id="limits" class="card acc reveal">
+    <details>
+    <summary class="acc-head"><span class="acc-title"><h2>Limits</h2><span class="sec-sub">What HotSync can't tell you.</span></span><span class="acc-icon" aria-hidden="true"></span></summary>
     <ul class="limits">
       <li><b>No morning VIIRS pass.</b> MODIS flies over at about 10:30 (Terra) and 13:30 (Aqua), VIIRS only at about 13:30 (and at night). Fires that burn only in the morning are seen by MODIS but not by VIIRS. The exchange rate learns this on average, but not for every single day.</li>
       <li><b>Clouds and smoke hide fires.</b> No satellite sees a fire under thick clouds or smoke, so a cloudy month can look quiet.</li>
@@ -439,11 +482,13 @@
       <li><b>The fire dots on the map are NASA's own detections</b>, drawn by NASA GIBS: they are not cleaned (factories and gas flares show too) and can't be clicked. All counts, the calendar and the downloads use our cleaned data.</li>
     </ul>
     <div class="note-box" id="countryLimits" hidden></div>
+    </details>
   </section>
 
   <!-- ============ DATA & SOURCES ============ -->
-  <section id="sources" class="card reveal">
-    <div class="card-head"><h2>Data &amp; Sources</h2></div>
+  <section id="sources" class="card acc reveal">
+    <details>
+    <summary class="acc-head"><span class="acc-title"><h2>Data &amp; Sources</h2><span class="sec-sub">NASA FIRMS, NASA GIBS, Natural Earth and the tools we used.</span></span><span class="acc-icon" aria-hidden="true"></span></summary>
     <div class="sources">
       <div>
         <h3>Data</h3>
@@ -467,6 +512,7 @@
       </div>
     </div>
     <p class="ack">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).</p>
+    </details>
   </section>
   <!-- ============ REPORT FOOTER: sources, only shown when printing ============ -->
   <section class="report-only report-foot" aria-hidden="true">
@@ -490,10 +536,10 @@
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
 <!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115n"></script>
-<script defer src="js/place-picker.js?v=20261115n"></script>
-<script defer src="js/globe-picker.js?v=20261115n"></script>
-<script defer src="js/date-picker.js?v=20261115n"></script>
-<script defer src="app.js?v=20261115n"></script>
+<script defer src="js/place-search.js?v=20261115p"></script>
+<script defer src="js/place-picker.js?v=20261115p"></script>
+<script defer src="js/globe-picker.js?v=20261115p"></script>
+<script defer src="js/date-picker.js?v=20261115p"></script>
+<script defer src="app.js?v=20261115p"></script>
 </body>
 </html>

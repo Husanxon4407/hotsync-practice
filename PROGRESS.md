@@ -199,3 +199,21 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   legend = small label in the bottom-left corner, "More map tools" = one small line. Full screen button
   (real browser full screen, Esc or the button to leave). A country zooms to its real border (biggest part),
   zoom steps of 1/4, world outside darker. Tested laptop + 380 px, full screen in/out.
+
+---
+## 2026-11-15 · Page redesign (asked by the user; old design saved as git tag design-v1)
+- Summary: short title "N fires in <place>", dates line, one sentence; "Why fair count?" opens the full text;
+  exchange rate = small badge "1 MODIS fire = X VIIRS fires", explanation opens on click. Place/Dates/Data chips removed.
+- The 8 cards moved under the calendar as "Key numbers" (4 main + 4 "What the satellites counted"),
+  one short line each (the long line is the tooltip), shorter (?) texts. 4 / 2 / 1 columns.
+- New look: design tokens at the top of style.css (space, 16 px card radius, soft shadows, 4 text sizes),
+  section headers = badge + title + short line, long notes behind "More", How/Limits/Sources = closed accordions
+  (menu links open them). Animations: page-load stagger (80 ms), scroll reveal with card stagger, reduced motion respected.
+- No number calculations changed. Print report: same page order (summary, key numbers, map + calendar).
+- Part 4-5 (user): numbers count up from 0 (0.8 s) when shown and on every change; calendar months appear in a wave
+  (only when place/dates/view change); charts animate (Chart.js, replay when scrolled into view); cards lift -3 px;
+  buttons press; toggles fade open/closed, Esc closes; place/dates change = fade out/in (opacity only).
+  The picker is no longer sticky: when scrolled away a pill bar shows "place · dates [Change]"; it opens the full
+  picker as a panel (click outside / Esc closes, closes after a pick); its slot keeps the height (no jump).
+  Print: no bar, no animation. Tested: US, Brazil, India, Mexico, Chile, Kenya, World, date quick button, shared link,
+  print report, 504 px + 1280 px, no console errors.

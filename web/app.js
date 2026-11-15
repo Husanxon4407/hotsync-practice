@@ -657,19 +657,17 @@ async function start() {
     if (readHash()) location.reload();       // another shared link pasted in
   });
   $("shareBtn").addEventListener("click", copyLink);
-  // Scrolled down: the sticky control box shrinks to one slim row, so it
-  // doesn't cover the map (laptops only; on phones it doesn't stick).
-  const box = document.querySelector(".controls.filters");
-  const slim = () => box.classList.toggle("slim", window.scrollY > 120 && innerWidth > 900);
-  window.addEventListener("scroll", slim, { passive: true });
-  window.addEventListener("resize", slim);
-  slim();
+  setupPickBar();
+  setupToggles();
   $("shareUrl").addEventListener("focus", (e) => e.target.select());
   $("printBtn").addEventListener("click", printReport);
+  setupRateBadge();
   // Menu links scroll to their section WITHOUT replacing the shared link.
   document.querySelectorAll("nav.sections a").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault();
     const el = document.querySelector(a.getAttribute("href"));
+    const acc = el && el.querySelector(":scope > details");
+    if (acc && el.classList.contains("acc")) acc.open = true;
     if (el) el.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth" });
   }));
 }
@@ -679,6 +677,7 @@ async function chooseCountry(slug) {
   const info = state.countries.find((c) => c.slug === slug);
   if (!info) return;
   $("countryInput").value = info.name;
+  fadeOut();
   let data = state.cache.get(slug);
   if (!data) {
     setLoading(`Loading ${info.name}…`);
@@ -722,6 +721,7 @@ async function chooseCountry(slug) {
   render();
   drawBorders();                            // clear border + darker world outside it
   // Now that the page is drawn, fetch the full squares in the background.
+  fadeIn();
   setTimeout(() => loadDetail(data).catch((err) => console.warn(err)), 300);
 }
 
@@ -745,8 +745,8 @@ function buildControls() {
       stopPlay();
       state.from = a; state.to = b;
       state.period = { kind: "range" };
-      setupDateInputs();
-      render();
+      fadeOut();
+      setTimeout(() => { setupDateInputs(); render(); fadeIn(); }, reduceMotion ? 0 : 140);
     },
   });
   // "Custom area ✕": removes the area drawn on the map
@@ -972,21 +972,27 @@ function recolor() {
   renderNormal();
 }
 
-// Big numbers count up (or down) to their new value: "449.3M", "+19%",
+// Big numbers count up from 0 to their value (0.8 s): "449.3M", "+19%",
 // "4.3", "9.9 MW". Anything else ("August", "n/a") is just written.
-// With "reduce motion" on, the final text appears at once.
+// A number that is not on screen yet waits, and counts when it appears
+// (setupReveal calls countUp). With "reduce motion" on, the final text appears at once.
 const NUM_RE = /^([+-]?)(\d+(?:\.\d+)?)(k|M| MW|%)?$/;
 function setNum(id, text) {
-  const el = $(id), m = NUM_RE.exec(text);
+  const el = $(id);
+  el.dataset.final = text;
+  const hidden = el.closest(".reveal:not(.in)");
+  if (hidden && !reduceMotion) { cancelAnimationFrame(el._raf || 0); el.textContent = text; return; }   // counts when shown
+  countUp(el);
+}
+function countUp(el) {
+  const text = el.dataset.final, m = NUM_RE.exec(text || "");
   cancelAnimationFrame(el._raf || 0);
-  if (!m) { el.textContent = text; delete el.dataset.num; return; }
+  if (!m || reduceMotion || document.documentElement.classList.contains("report")) { el.textContent = text ?? el.textContent; return; }
   const sign = m[1] === "-" ? -1 : 1, to = sign * parseFloat(m[2]), unit = m[3] || "";
-  const dec = (m[2].split(".")[1] || "").length;
-  const from = el.dataset.num !== undefined && el.dataset.unit === unit ? +el.dataset.num : 0;
-  el.dataset.num = to; el.dataset.unit = unit;
-  if (reduceMotion || from === to) { el.textContent = text; return; }
+  const dec = (m[2].split(".")[1] || "").length, from = 0;
+  if (to === 0) { el.textContent = text; return; }
   const show = (v) => (unit === "%" && Math.round(v) > 0 ? "+" : "") + v.toFixed(dec) + unit;
-  const t0 = performance.now(), dur = 650;
+  const t0 = performance.now(), dur = 800;
   const step = (now) => {
     // (a frame's time can be a little BEFORE t0: keep k between 0 and 1)
     const k = Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);   // ease out
@@ -1009,13 +1015,13 @@ function updateSteps() {
   if (datePicker && state.from && state.to) datePicker.setLabel(state.from, state.to);   // the Dates button
   // What the shared link will open
   if (state.c) $("sharePreview").textContent = `${state.c.name} · ${monthShort(state.from)} – ${monthShort(state.to)}${state.area ? " · custom area" : ""}`;
+  if (state.c) $("pickBarText").textContent = `${state.c.name}${state.area ? " (your area)" : ""} · ${monthShort(state.from)} – ${monthShort(state.to)}`;
 }
 
 function renderHeader() {
   const c = state.c;
   updateSteps();
-  $("heroArea").textContent = state.area ? `${c.name} · ${state.area.label}` : c.name;
-  $("heroRange").textContent = `${monthShort(state.from)} – ${monthShort(state.to)}`;
+  $("heroRange").textContent = `${monthShort(state.from)} – ${monthShort(state.to)}` + (state.area ? ` · ${state.area.label}` : "");
   $("areaChip").hidden = !state.area;                 // "Custom area ✕" only when one is drawn
   $("shareFallback").hidden = true;                   // the view changed: an old link is wrong now
 
@@ -1047,13 +1053,20 @@ function renderHeader() {
   if (isWorld()) notes.push("Every country uses its own rate; pick a country to see it.");
   if (c.rate_source === "global") notes.push("<b>Few fires here, so we use the world median rate.</b>");
   if (avg === 0) notes.push("<b>Rate 0:</b> MODIS sees hot places here that VIIRS does not count as fires, so MODIS-only years become 0.");
-  $("exCap").innerHTML = `fires seen by VIIRS for every 1 fire seen by MODIS in ${countryName()}, for your dates. ` +
+  $("exCap").innerHTML = `<b>1 MODIS fire = ${avg.toFixed(1)} VIIRS fires.</b> That is how many fires VIIRS sees for every 1 fire MODIS sees in ${countryName()}, for your dates. ` +
     `We call this the <b>"exchange rate"</b>: VIIRS sees more because its pixels are smaller.` + (notes.length ? "<br>" + notes.join(" ") : "");
 }
 
 // ------------------------------------------------------------------ SUMMARY CARDS + SENTENCE
 // "Real fire numbers": what the satellites actually counted (after cleaning,
 // no exchange rate), like the cards of the first prototype.
+// A card's short line; the full text stays in its tooltip (title).
+function short(id, text, full) {
+  const el = $(id);
+  el.textContent = text;
+  el.title = full && full !== text ? full : "";
+}
+
 function renderRealStats() {
   const c = state.c, s = state.series, [a, b] = rangeIdx();
   // Totals include everything; "per year" uses FULL months only (the month
@@ -1065,12 +1078,14 @@ function renderRealStats() {
     if (s.viirs[i] !== null) { vi += s.viirs[i]; fv += s.frpV[i]; if (done) { viFull += s.viirs[i]; viMonths++; } }
   }
   setNum("kModis", compact(mo));
-  $("kModisS").textContent = `${fmt(mo)} detections` + (moMonths ? ` · ${compact(moFull / (moMonths / 12))} per year` : "");
+  short("kModisS", moMonths ? `${compact(moFull / (moMonths / 12))} per year` : `${fmt(mo)} detections`,
+    `${fmt(mo)} detections` + (moMonths ? ` · ${compact(moFull / (moMonths / 12))} per year` : ""));
   setNum("kViirs", vi || viMonths ? compact(vi) : "no data");
-  $("kViirsS").textContent = vi || viMonths
-    ? `${fmt(vi)} detections` + (viMonths ? ` · ${compact(viFull / (viMonths / 12))} per year` : "") +
-      (c.months[a] < "2012-02" ? " (VIIRS starts 20 Jan 2012)" : "")
-    : "No VIIRS yet: its data starts on 20 Jan 2012";
+  if (vi || viMonths) short("kViirsS", (viMonths ? `${compact(viFull / (viMonths / 12))} per year` : `${fmt(vi)} detections`) +
+      (c.months[a] < "2012-02" ? " · from 2012" : ""),
+    `${fmt(vi)} detections` + (viMonths ? ` · ${compact(viFull / (viMonths / 12))} per year` : "") +
+      (c.months[a] < "2012-02" ? " (VIIRS starts 20 Jan 2012)" : ""));
+  else short("kViirsS", "starts 20 Jan 2012", "No VIIRS yet: its data starts on 20 Jan 2012");
 
   // Busiest day in the range (daily numbers are for the whole country/world)
   const d = c.daily, i0 = Math.max(0, dayIndex(state.from + "-01"));
@@ -1080,15 +1095,15 @@ function renderRealStats() {
   for (let i = i0; i <= i1; i++) if ((d.harmonized[i] || 0) > (d.harmonized[best] || 0)) best = i;
   const day = dayAt(best);
   $("kBusyDay").textContent = new Date(toUTC(day)).toLocaleDateString("en-US", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" });
-  $("kBusyDayS").textContent = `${fmt(d.harmonized[best])} fires (fair count)` +
-    (state.area ? (isWorld() ? " (whole world)" : " (whole country)") : "");
+  short("kBusyDayS", `${compact(d.harmonized[best])} fires`, `${fmt(d.harmonized[best])} fires (fair count)` +
+    (state.area ? (isWorld() ? " (whole world)" : " (whole country)") : "") + ". Click to open this day.");
   $("kBusyDayCard").dataset.day = day;
 
   // Fire strength: average fire radiative power (FRP) per detection
   const useV = vi > 0, frp = useV ? fv / vi : mo ? fm / mo : 0;
   setNum("kFrp", frp ? frp.toFixed(1) + " MW" : "–");
-  $("kFrpS").textContent = `average per ${useV ? "VIIRS" : "MODIS"} detection` +
-    (useV && mo ? ` · MODIS: ${(fm / mo).toFixed(1)} MW (bigger pixels)` : "");
+  short("kFrpS", `per ${useV ? "VIIRS" : "MODIS"} detection`, `average per ${useV ? "VIIRS" : "MODIS"} detection` +
+    (useV && mo ? ` · MODIS: ${(fm / mo).toFixed(1)} MW (bigger pixels)` : ""));
 }
 
 function renderCards() {
@@ -1100,7 +1115,7 @@ function renderCards() {
   // 1. Total harmonized
   const total = idx.reduce((t, i) => t + (s.h[i] || 0), 0);
   setNum("kTotal", compact(total));
-  $("kTotalS").textContent = `${fmt(total)} in ${idx.length} month${idx.length === 1 ? "" : "s"}`;
+  short("kTotalS", `in ${idx.length} month${idx.length === 1 ? "" : "s"}`, `${fmt(total)} fires (fair count) in ${idx.length} month${idx.length === 1 ? "" : "s"}`);
 
   // 2. Busiest calendar month (average; the month in progress is left out)
   const sums = new Array(12).fill(0), counts = new Array(12).fill(0);
@@ -1112,8 +1127,9 @@ function renderCards() {
   const avgs = sums.map((x, k) => (counts[k] ? x / counts[k] : -1));
   const busy = avgs.indexOf(Math.max(...avgs));
   $("kBusy").textContent = avgs[busy] >= 0 ? MONTHS_LONG[busy] : "–";
-  $("kBusyS").textContent = avgs[busy] < 0 ? "No complete month in your range"
-    : counts[busy] > 1 ? `${fmt(avgs[busy])} fires on average (${counts[busy]} years)` : `${fmt(avgs[busy])} fires`;
+  if (avgs[busy] < 0) short("kBusyS", "no complete month", "No complete month in your range");
+  else short("kBusyS", `${compact(avgs[busy])} fires${counts[busy] > 1 ? " on average" : ""}`,
+    counts[busy] > 1 ? `${fmt(avgs[busy])} fires on average (${counts[busy]} years)` : `${fmt(avgs[busy])} fires`);
 
   // 3. Top 3 years: FULL years only (all 12 months in range, none missing or
   // in progress). Terra-only years (before Jul 2002) get a "*".
@@ -1131,12 +1147,12 @@ function renderCards() {
   if (fullYears.length >= 2) {
     $("kTop").textContent = top.map(star).join(" · ");
     $("kTop").title = anyTerra ? "* Terra only: least certain years" : "";
-    $("kTopS").textContent = top.map(([, v]) => compact(v.t)).join(" · ") + " fires" +
-      (anyTerra ? " · * Terra only: least certain years" : "");
+    short("kTopS", top.map(([, v]) => compact(v.t)).join(" · ") + " fires",
+      top.map(([, v]) => compact(v.t)).join(" · ") + " fires" + (anyTerra ? " · * Terra only: least certain years" : ""));
   } else {
     $("kTop").textContent = "–";
     $("kTop").title = "";
-    $("kTopS").textContent = "Pick at least 2 full years to compare years";
+    short("kTopS", "pick 2+ full years", "Pick at least 2 full years to compare years");
   }
 
   // 4. LAST MONTH IN YOUR RANGE vs its normal (+ rank among the same month).
@@ -1150,37 +1166,29 @@ function renderCards() {
     lmName = sf.D ? `${monthLong(lm)} so far (1–${sf.D})` : `${monthLong(lm)} so far`;
     verb = "is";
     setNum("kLatest", pct(an));
-    $("kLatestS").textContent = sf.D
-      ? `${lmName}, vs the same days of ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}` + (rank ? ` · ${ordinal(rank)} highest of ${sf.vals.length + 1}` : "")
-      : `${monthLong(lm)} has just started: no complete day yet`;
+    short("kLatestS", sf.D ? `${monthShort(lm)} so far (days 1–${sf.D})` : `${monthShort(lm)}: just started`,
+      sf.D
+        ? `${lmName}, vs the same days of ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}` + (rank ? ` · ${ordinal(rank)} highest of ${sf.vals.length + 1}` : "")
+        : `${monthLong(lm)} has just started: no complete day yet`);
   } else if (s.h[li] === null) {
     setNum("kLatest", "n/a");
-    $("kLatestS").textContent = `${monthLong(lm)}: no data`;
+    short("kLatestS", `${monthShort(lm)}: no data`, `${monthLong(lm)}: no data`);
   } else {
     const same = c.months.map((m, i) => [m, i]).filter(([m]) => +m.slice(5, 7) === k + 1 && m >= "2001-01" && m !== c.inProgress);
     const rank = 1 + same.filter(([, i]) => s.h[i] > s.h[li]).length;
     setNum("kLatest", pct(an));
-    $("kLatestS").textContent = `${monthLong(lm)}: ${ordinal(rank)} highest ${MONTHS_LONG[k]} since 2001`;
+    short("kLatestS", `${monthShort(lm)} · ${ordinal(rank)} highest`, `${monthLong(lm)}: ${ordinal(rank)} highest ${MONTHS_LONG[k]} since 2001`);
   }
 
-  // Sentence built from the numbers
-  const y0 = c.months[a].slice(0, 4), y1 = c.months[b].slice(0, 4);
-  let text = avgs[busy] < 0 ? "" : many ? `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> is usually the busiest month. `
-    : `In ${areaName()}, <b>${MONTHS_LONG[busy]}</b> was the busiest month in your range. `;
-  if (y0 === y1) {
-    text += `In ${y0}${c.months[a] !== y0 + "-01" || c.months[b] !== y0 + "-12" ? " (your months)" : ""} there were <b>${fmt(total)}</b> fires (fair count). `;
-  } else if (fullYears.length >= 2) {
-    const yrs = fullYears.map(([y]) => y).sort();
-    text += `<b>${star(top[0])}</b> had the most fires of the full years from ${yrs[0]} to ${yrs[yrs.length - 1]}` +
-      (top[0][1].terra ? " (* Terra only: least certain)" : "") + ". ";
-  }
+  // One short sentence built from the numbers: busiest month + last month vs normal
+  let text = avgs[busy] < 0 ? "" : `<b>${MONTHS_LONG[busy]}</b> ${many ? "is usually" : "was"} the busiest month. `;
   text += an === null
     ? `${lmName} has no normal to compare with.`
     : Math.abs(Math.round(an)) < 1
       ? `${lmName} ${verb} <b>about normal</b>.`
       : `${lmName} ${verb} <b>${Math.abs(Math.round(an))}% ${an >= 0 ? "above" : "below"} normal</b>${going ? " for the same days" : ""}.`;
   $("summary").innerHTML = text;
-  $("heroTitle").innerHTML = `${compact(total)} fires (fair count) in ${state.area ? "your area" : countryName()}, ${monthShort(state.from)} – ${monthShort(state.to)}`;
+  $("heroTitle").innerHTML = `${compact(total)} fires in ${state.area ? "your area" : countryName()}`;
 }
 
 // ------------------------------------------------------------------ MAP
@@ -1803,14 +1811,22 @@ function renderCalendar() {
       if (c.partial_months[m]) cls += " partial";
       else if (c.terra_only_months.includes(m)) cls += " terra";
       if (state.period.kind === "month" && state.period.mi === i) cls += " sel";
+      style += `;--w:${(y - y0) * 35 + (k - 1) * 22}ms`;       // wave delay
       parts.push(`<button type="button" class="${cls}" style="${style}" data-i="${i ?? ""}" data-m="${m}" aria-label="${monthLong(m)}: ${label || "no data"}">${label}</button>`);
     }
   }
   const cal = $("cal");
   cal.innerHTML = parts.join("");
+  // Wave only when the place, dates or view changed (not on a month click)
+  const waveKey = `${c.slug}|${state.from}|${state.to}|${state.calMode}|${!!state.selCells}`;
+  cal.classList.toggle("wave", waveKey !== cal.dataset.wave && !reduceMotion);
+  cal.dataset.wave = waveKey;
 
   const modeName = { harmonized: "Fair count of fires", modis: "Fires MODIS saw", viirs: "Fires VIIRS saw", anomaly: "Compared to normal" }[state.calMode];
   $("calTitle").textContent = `Fire calendar · ${modeName}`;
+  $("calSum").textContent = anomalyMode
+    ? "Blue = fewer fires than normal, red = more."
+    : "Same colours in every view: darker = more fires.";
   $("calNote").innerHTML = anomalyMode
     ? `Each month compared with its <b>normal</b> (the median of the same month, ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}). Blue = fewer fires than normal, red = more.`
     : `All count views use <b>the same colours</b>. "MODIS saw" looks pale because MODIS misses small fires; the <b>fair count</b> makes old and new years comparable. <b>Click a month</b> to see it on the map.`;
@@ -1941,7 +1957,7 @@ function buildDayChart() {
       { label: "Fair count", data: [], borderWidth: 2, pointRadius: 0, tension: 0.25, borderDash: [7, 4] },
     ] },
     options: {
-      responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
+      responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 800, easing: "easeOutQuart" },
       interaction: { mode: "index", intersect: false },
       plugins: { legend: { display: false } },
       scales: { x: { ticks: { maxTicksLimit: 8 } }, y: { beginAtZero: true } },
@@ -2001,7 +2017,7 @@ function renderGibs() {
 let proofChart, normalChart;
 function buildProofCharts() {
   const base = {
-    responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 400 },
+    responsive: true, maintainAspectRatio: false, animation: reduceMotion ? false : { duration: 800, easing: "easeOutQuart" },
     interaction: { mode: "index", intersect: false },
     plugins: { legend: { display: false } },
   };
@@ -2058,7 +2074,7 @@ function renderProof() {
   ds[2].data = idx.map(([m, i]) => Math.round(rate(m) * s.modis[i]));
   [ds[0].borderColor, ds[1].borderColor, ds[2].borderColor] = [css("--modis"), css("--viirs"), css("--harm")];
   chartChrome(proofChart);
-  proofChart.update("none");
+  proofChart.update();
 
   // How close are the lines (whole period)? And the honest hidden-years test.
   const sumV = idx.reduce((t, [, i]) => t + (s.viirs[i] || 0), 0);
@@ -2073,6 +2089,7 @@ function renderProof() {
   if (state.area) html += ` <i>(Test numbers are for ${isWorld() ? "the whole world" : `all of ${countryName()}`}.)</i>`;
   if (c.rate_source === "global") html += ` <i>Few fires here, so the world median rate is used: this test says little.</i>`;
   $("proofNote").innerHTML = html;
+  $("proofSum").innerHTML = `Converted MODIS = <b>${sumV ? Math.round((sumH / sumV) * 100) : "–"}%</b> of VIIRS · test: <b>${verdict(v.median_abs_error_pct, v.bias_pct)}</b>`;
 }
 
 function quantile(arr, q) {
@@ -2103,7 +2120,7 @@ function renderNormal() {
   ds[3].data = vals;
   ds[3].backgroundColor = years.map((y) => (+y === state.normalYear ? css("--brand-solid") : css("--line-strong")));
   chartChrome(normalChart);
-  normalChart.update("none");
+  normalChart.update();
 
   const yi = years.indexOf(String(state.normalYear)), val = vals[yi];
   const chosen = `${state.normalYear}-${String(k).padStart(2, "0")}`;
@@ -2113,6 +2130,7 @@ function renderNormal() {
     $("normalNote").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> (blue bar) is <b>still in progress</b>: ` +
       `${fmt(sf.value)} fires (fair count) in its complete days 1–${sf.D}, <b>${an === null ? "no normal" : pct(an)}</b> vs the same days of ` +
       `${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]} (normal = ${fmt(sf.normal)}). The other bars are full months. Click a bar to pick another year.`;
+    $("normalSum").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b> so far: <b>${an === null ? "no normal" : pct(an)}</b> vs normal`;
     return;
   }
   const rank = 1 + vals.filter((x) => x > val).length;
@@ -2121,6 +2139,7 @@ function renderNormal() {
     `<b>${an === null ? "no normal to compare" : pct(an) + " vs normal"}</b> (normal = ${fmt(med)}). ` +
     `${ordinal(rank)} highest ${MONTHS_LONG[k - 1]} of ${years.length} years. ` +
     `Half of all years fall inside the green band (${fmt(q25)}–${fmt(q75)}). Click a bar to pick another year.`;
+  $("normalSum").innerHTML = `<b>${MONTHS_LONG[k - 1]} ${state.normalYear}</b>: <b>${an === null ? "no normal" : pct(an) + " vs normal"}</b> · ${ordinal(rank)} highest of ${years.length}`;
 }
 
 // ------------------------------------------------------------------ HOW HOTSYNC WORKS (this country's numbers)
@@ -2217,11 +2236,115 @@ function downloadMonthly() {
   toast(`Downloaded ${rows.length} months`);
 }
 
+// ------------------------------------------------------------------ PAGE FEEL (animations, compact picker)
+// Place or dates change: the content fades out and back in (opacity only,
+// so nothing jumps).
+function fadeOut() { if (!reduceMotion) document.querySelector("main").classList.add("changing"); closePickPanel(); }
+function fadeIn() { requestAnimationFrame(() => document.querySelector("main").classList.remove("changing")); }
+
+// The picker (Place · Dates · Share) stays in its place at the top. When it
+// scrolls out of view, a small pill bar appears: "United States · May 2025 –
+// Sep 2025 [Change]". Clicking it opens the full picker as a panel; a click
+// outside or Esc closes it. Its empty place in the page keeps the same height
+// (the "slot"), so the content below never jumps.
+var pickOpen = false;          // var: chooseCountry may call closePickPanel early
+function closePickPanel(focusBar) {
+  if (!pickOpen) return;
+  pickOpen = false;
+  const box = document.querySelector(".controls.filters"), slot = $("pickSlot");
+  box.classList.remove("as-panel");
+  slot.style.height = "";
+  $("pickBar").classList.remove("open");
+  $("pickBarBtn").setAttribute("aria-expanded", "false");
+  if (focusBar) $("pickBarBtn").focus();
+}
+function setupPickBar() {
+  const box = document.querySelector(".controls.filters"), slot = $("pickSlot");
+  const bar = $("pickBar"), btn = $("pickBarBtn");
+  const show = (on) => {
+    bar.classList.toggle("show", on);
+    bar.setAttribute("aria-hidden", String(!on));
+    btn.tabIndex = on ? 0 : -1;
+    if (!on) closePickPanel();
+  };
+  // The bar shows when the picker's slot has scrolled up under the header.
+  new IntersectionObserver(([en]) => show(!en.isIntersecting && en.boundingClientRect.top < 0),
+    { rootMargin: "-70px 0px 0px 0px" }).observe(slot);
+  btn.addEventListener("click", () => {
+    if (pickOpen) { closePickPanel(); return; }
+    pickOpen = true;
+    slot.style.height = slot.offsetHeight + "px";       // keep the space
+    box.classList.add("as-panel");
+    bar.classList.add("open");
+    btn.setAttribute("aria-expanded", "true");
+    box.tabIndex = -1;                                    // keyboard focus goes into the panel
+    box.focus({ preventScroll: true });
+  });
+  // Click outside closes it (the date pop-up, globe and lists are not "outside")
+  document.addEventListener("pointerdown", (e) => {
+    if (!pickOpen) return;
+    const t = e.target;
+    if (box.contains(t) || bar.contains(t) || t.closest(".dp, .dp-back, .gmodal, .place-list")) return;
+    closePickPanel();
+  });
+  // Esc closes it, unless a pop-up inside it is open (that one closes first).
+  // (Capture phase: we look before the pop-up closes itself.)
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape" || !pickOpen) return;
+    if (document.querySelector(".dp.open, .gmodal.open") || $("countryInput").getAttribute("aria-expanded") === "true") return;
+    closePickPanel(true);
+  }, true);
+}
+
+// "More ▾", "Why fair count?" and the accordions: opening fades the text in
+// (CSS); closing fades it out first, then closes. Esc closes the one you are in.
+function setupToggles() {
+  document.querySelectorAll("details.more, .acc > details, details.why, details.map-more").forEach((d) => {
+    d.querySelector(":scope > summary").addEventListener("click", (e) => {
+      if (!d.open || reduceMotion) return;
+      e.preventDefault();
+      d.classList.add("closing");
+      setTimeout(() => { d.open = false; d.classList.remove("closing"); }, 180);
+    });
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key !== "Escape") return;
+    const d = document.activeElement && document.activeElement.closest("details[open]");
+    if (d) { d.open = false; d.querySelector(":scope > summary").focus(); }
+  });
+}
+
 // ------------------------------------------------------------------ SCROLL EFFECTS
+// The exchange-rate badge opens its explanation (click, Esc or a click outside closes)
+function setupRateBadge() {
+  const btn = $("rateBadge"), pop = $("ratePop");
+  const set = (on) => { pop.hidden = !on; btn.setAttribute("aria-expanded", String(on)); };
+  btn.addEventListener("click", (e) => { e.stopPropagation(); set(pop.hidden); });
+  document.addEventListener("click", (e) => { if (!pop.hidden && !pop.contains(e.target)) set(false); });
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !pop.hidden) { set(false); btn.focus(); } });
+}
+
+// Page load: header + summary parts fade in one after another (80 ms apart).
+// Scroll: sections fade in when they come into view; cards in a row one by one.
+function shown(el) {
+  el.classList.add("in");
+  setTimeout(() => el.style.removeProperty("--d"), 1200);    // hover lift without delay later
+  const delay = parseFloat(el.style.getPropertyValue("--d")) || 0;
+  setTimeout(() => {
+    el.querySelectorAll("[data-final]").forEach(countUp);    // numbers count up from 0
+    el.querySelectorAll("canvas").forEach((cv) => {           // charts draw / grow
+      const ch = window.Chart && Chart.getChart(cv);
+      if (ch) { ch.reset(); ch.update(); }
+    });
+  }, delay);
+}
+
 function setupReveal() {
+  document.querySelectorAll(".load-in").forEach((el, i) => el.style.setProperty("--i", i));
+  document.querySelectorAll(".kpis").forEach((row) => [...row.children].forEach((el, i) => el.style.setProperty("--d", i * 70 + "ms")));
   const els = document.querySelectorAll(".reveal");
   if (reduceMotion || !("IntersectionObserver" in window)) { els.forEach((e) => e.classList.add("in")); return; }
-  const io = new IntersectionObserver((list) => list.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } }), { threshold: 0.08 });
+  const io = new IntersectionObserver((list) => list.forEach((en) => { if (en.isIntersecting) { shown(en.target); io.unobserve(en.target); } }), { threshold: 0.08 });
   els.forEach((e) => io.observe(e));
 }
 function setupScrollSpy() {
