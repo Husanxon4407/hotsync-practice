@@ -133,5 +133,16 @@ To re-process data you need the 7 GB of FIRMS zips (`python download_firms.py`) 
 
 **Ideas not done yet (Stage 7 extras 2–7, optional):** print/PDF "Fire report", exchange-rate world map,
 fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
-**Known to improve:** World file is 16.7 MB (first load ~5 s; plan target 3 s) → e.g. 3° squares or no FRP in world squares.
 **Year end:** see README "When a year ends".
+
+---
+## 2026-11-15 · Speed fix (Stage 8 target: first load < 3 s)
+- Problem: world.json was 16.7 MB (6.4 MB compressed), 99% of it map squares month by month.
+- Fix: every place is now TWO files: `<slug>.json` (summary + ONE total per square for the first view,
+  2001-01 -> latest) and `<slug>.cells.gz` (all squares, packed: number columns + gzip). The page draws from
+  the small file; the packed file loads in the background (needed for other dates, a drawn area, a popup).
+- No method change: same numbers. Checked: all 235 files unpacked and compared with the old squares (identical);
+  quick totals = full squares for all 5,078 World squares; Brazil test box 2019 = old file exactly.
+- Turf.js removed (only used for "is the square inside the area?"; now a small function). Libraries load with `defer`.
+- First visit (World, compressed): ~7.2 MB -> ~0.86 MB. Switching country: Brazil 8.2 MB -> 168 KB before it shows.
+- `python process_all.py --repack` converts old one-file JSONs; normal runs write the two files directly.

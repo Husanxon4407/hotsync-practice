@@ -208,6 +208,110 @@ async function getJSON(url) {
   return res.json();
 }
 
+// ------------------------------------------------------------------ MAP SQUARES (fast loading)
+// Each place has a small <slug>.json (opens the page at once, with one total
+// per square for the first view) and <slug>.cells.gz: every square month by
+// month, packed by process_all.py (pack_cells). The packed file loads in the
+// background; it is needed only for other dates, a drawn area or a popup.
+async function gunzip(buf) {
+  if (typeof DecompressionStream === "undefined") {          // very old browser
+    if (!window.pako) await new Promise((ok, fail) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/pako/2.1.0/pako.min.js";
+      s.onload = ok; s.onerror = () => fail(new Error("could not load pako"));
+      document.head.appendChild(s);
+    });
+    return window.pako.ungzip(buf);
+  }
+  const stream = new Blob([buf]).stream().pipeThrough(new DecompressionStream("gzip"));
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+// Bytes -> {"i_j": [[month_index, modis, viirs, h, frp_m, frp_v], ...]}
+function unpackCells(buf) {
+  let p = 0;
+  const next = () => {                       // one LEB128 number
+    let b = buf[p++];
+    if (b < 128) return b;                   // most numbers are small: 1 byte
+    let x = b & 127, mul = 128;
+    do { b = buf[p++]; x += (b & 127) * mul; mul *= 128; } while (b >= 128);
+    return x;
+  };
+  const unzig = (x) => (x % 2 ? -(x + 1) / 2 : x / 2);
+  if (next() !== 1) throw new Error("unknown squares file format");
+  const n = next(), heads = new Array(n);
+  let total = 0;
+  for (let k = 0; k < n; k++) { const i = unzig(next()), j = unzig(next()), len = next(); heads[k] = [i, j, len]; total += len; }
+  const cols = [];
+  for (let c = 0; c < 6; c++) { const a = new Float64Array(total); for (let k = 0; k < total; k++) a[k] = next(); cols.push(a); }
+  const [c0, c1, c2, c3, c4, c5] = cols, cells = {};
+  let k = 0;
+  for (const [i, j, len] of heads) {
+    const rows = new Array(len);
+    let mi = 0;
+    for (let r = 0; r < len; r++, k++) {
+      mi += c0[k];
+      rows[r] = [mi, c1[k], c2[k], c3[k] / 10, c4[k], c5[k]];
+    }
+    cells[`${i}_${j}`] = rows;
+  }
+  return cells;
+}
+
+// Start (once) loading the full squares of place c. Resolves when ready.
+function loadDetail(c) {
+  if (c.detailReady) return Promise.resolve();
+  if (!c._detail) {
+    c._detail = (async () => {
+      let cells = c.cells;                   // an old one-file JSON already has them
+      if (!cells) {
+        const res = await fetch(`data/country/${c.cells_file}`);
+        if (!res.ok) throw new Error(`${c.cells_file}: HTTP ${res.status}`);
+        let buf = new Uint8Array(await res.arrayBuffer());
+        if (buf[0] === 0x1f && buf[1] === 0x8b) buf = await gunzip(buf);   // server did not unzip it
+        cells = unpackCells(buf);
+      }
+      for (const [key, rows] of Object.entries(c.recentCells || {})) (cells[key] ||= []).push(...rows);
+      c.cells = cells;
+      c.detailReady = true;
+    })().catch((err) => { c._detail = null; throw err; });   // allow a retry
+  }
+  return c._detail;
+}
+
+// Can the first-view totals answer months [a, b] (no full squares needed)?
+function quickOK(a, b) {
+  const c = state.c;
+  return !!c.quick && a === c.quickA && b >= c.quickB;
+}
+
+// Wait for the full squares (shows a note while loading). false = failed.
+async function needDetail() {
+  const c = state.c;
+  if (c.detailReady) return true;
+  setLoading("Loading map details…");
+  try { await loadDetail(c); return true; }
+  catch (err) { console.error(err); toast("Could not load the map details. Check your internet and try again."); return false; }
+  finally { setLoading(""); }
+}
+
+// Is point (x = lon, y = lat) inside a GeoJSON Polygon / MultiPolygon?
+// (Ray casting; holes count as outside.)
+function insideShape(x, y, geom) {
+  const ring = (pts) => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, yi] = pts[i], [xj, yj] = pts[j];
+      if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  const poly = (rings) => ring(rings[0]) && !rings.slice(1).some(ring);
+  if (geom.type === "Polygon") return poly(geom.coordinates);
+  if (geom.type === "MultiPolygon") return geom.coordinates.some(poly);
+  return false;
+}
+
 // ------------------------------------------------------------------ CURRENT YEAR (Stage 6)
 // History 2000-2025 never changes. The current year comes from small files
 // that the robot (update_recent.py) refreshes, and we join them here.
@@ -282,11 +386,12 @@ async function mergeRecent(c) {
     c.totals.modis.push(have ? mo : null); c.totals.viirs.push(have ? vi : null); c.totals.harmonized.push(have ? vi : null);
     c.totals.frp_modis.push(have ? fm : null); c.totals.frp_viirs.push(have ? fv : null);
   }
-  // Map squares of each new month
+  // Map squares of each new month (joined to the full squares in loadDetail)
   const cellObjs = await Promise.all(newMonths.map((m) => loadRecentCells(m, c.slug)));
+  c.recentCells = {};
   newMonths.forEach((m, k) => {
     const mi = c.months.indexOf(m);          // month_index = place in c.months
-    for (const [key, [mo, vi, fm, fv]] of Object.entries(cellObjs[k])) (c.cells[key] ||= []).push([mi, mo, vi, vi, fm, fv]);
+    for (const [key, [mo, vi, fm, fv]] of Object.entries(cellObjs[k])) (c.recentCells[key] ||= []).push([mi, mo, vi, vi, fm, fv]);
   });
   c.recentLastDay = lastDay;
   // The newest day may still be loading (near-real-time data). Only days up
@@ -496,6 +601,13 @@ async function chooseCountry(slug) {
     state.cache.set(slug, data);
   }
   await mergeRecent(data);                  // add the current year (once)
+  if (!data.cellKeys) {
+    // First-view square totals + the square list (history + current year)
+    const q = data.cell_quick;
+    data.quick = q ? q.squares : null;
+    if (q) { data.quickA = data.months.indexOf(q.from); data.quickB = data.months.indexOf(q.to); }
+    data.cellKeys = [...new Set([...Object.keys(data.quick || data.cells), ...Object.keys(data.recentCells || {})])];
+  }
   setLoading("");
   state.c = data;
   const last = data.months[data.months.length - 1];
@@ -515,6 +627,8 @@ async function chooseCountry(slug) {
   buildSquares();
   fitCountry();
   render();
+  // Now that the page is drawn, fetch the full squares in the background.
+  setTimeout(() => loadDetail(data).catch((err) => console.warn(err)), 300);
 }
 
 // ------------------------------------------------------------------ CONTROLS
@@ -997,7 +1111,7 @@ function buildSquares() {
   squareLayer.clearLayers();
   squares.clear();
   const cs = state.c.cell_size;
-  for (const key of Object.keys(state.c.cells)) {
+  for (const key of state.c.cellKeys) {
     const [i, j] = key.split("_").map(Number);
     const rect = L.rectangle([[i * cs, j * cs], [(i + 1) * cs, (j + 1) * cs]],
       { renderer, weight: 0.4, color: "#ffffff", fillOpacity: 0.85 });
@@ -1017,9 +1131,13 @@ function mapRange() {
 const FIELD = { modis: 1, viirs: 2, harmonized: 3 };
 
 // Sum of one square over the map months: [modis, viirs, h]
+// Before the full squares arrive, the first view uses the ready-made totals
+// (+ the current year's squares). Needs detailReady || quickOK(a, b).
 function squareSum(key, a, b) {
-  const out = [0, 0, 0];
-  for (const r of state.c.cells[key]) {
+  const c = state.c, out = [0, 0, 0];
+  let rows = c.detailReady ? c.cells[key] : (c.recentCells || {})[key];
+  if (!c.detailReady && c.quick && c.quick[key]) { const q = c.quick[key]; out[0] = q[0]; out[1] = q[1]; out[2] = q[2]; }
+  for (const r of rows || []) {
     if (r[0] >= a && r[0] <= b) { out[0] += r[1]; out[1] += r[2]; out[2] += r[3]; }
   }
   return out;
@@ -1028,16 +1146,22 @@ function squareSum(key, a, b) {
 function renderMap() {
   if (!state.c) return;
   const [a, b] = mapRange(), off = state.squareMode === "off";
+  const c = state.c, waiting = !c.detailReady && !quickOK(a, b);
+  if (waiting) {
+    // Other dates need the full squares: draw again as soon as they are here.
+    loadDetail(c).then(() => { if (state.c === c) renderMap(); })
+      .catch(() => toast("Could not load the map details. Check your internet and try again."));
+  }
   const f = off ? 2 : FIELD[state.squareMode] - 1;
   const vals = new Map();
   let max = 0;
-  for (const key of squares.keys()) {
+  if (!waiting) for (const key of squares.keys()) {
     const v = squareSum(key, a, b)[f];
     vals.set(key, v);
     if ((!state.selCells || state.selCells.has(key)) && v > max) max = v;
   }
   const edge = css("--card-solid") || "#fff";
-  for (const [key, rect] of squares) {
+  if (!waiting) for (const [key, rect] of squares) {
     const v = vals.get(key), k = seqClass(v, max);
     const inside = !state.selCells || state.selCells.has(key);
     // With a satellite picture under them, squares get see-through.
@@ -1049,13 +1173,14 @@ function renderMap() {
 
   // "The map shows ..." text
   const p = state.period, m = state.c.months;
-  $("mapPeriod").textContent = p.kind === "range" ? `${monthShort(m[a])} – ${monthShort(m[b])} (sum)`
-    : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`;
+  $("mapPeriod").textContent = (p.kind === "range" ? `${monthShort(m[a])} – ${monthShort(m[b])} (sum)`
+    : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`) + (waiting ? " · loading map details…" : "");
   $("periodResetBtn").hidden = p.kind === "range";
 
   // Legend
   const sq = { harmonized: "Fair count of fires", modis: "Fires MODIS saw", viirs: "Fires VIIRS saw" }[state.squareMode];
   let leg = off ? `<span class="key">Squares hidden</span>`
+    : waiting ? `<span class="key">Loading map details…</span>`
     : `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} per square of ${state.c.cell_size}° (1 → ${compact(max)})</span>`;
   if (state.selCells && !off) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
   if (state.fire.on || state.live) {
@@ -1069,7 +1194,8 @@ function renderMap() {
   writeHash();                 // keep the shareable link up to date
 }
 
-function squarePopup(key, latlng) {
+async function squarePopup(key, latlng) {
+  if (!state.c.detailReady && !quickOK(...mapRange()) && !(await needDetail())) return;
   const [a, b] = mapRange(), m = state.c.months, cs = state.c.cell_size;
   const [i, j] = key.split("_").map(Number);
   const [mo, vi, h] = squareSum(key, a, b);
@@ -1102,12 +1228,15 @@ function renderAreaStats(a, b) {
 function useArea(layer, label) {
   if (state.area && state.area.layer !== layer) drawnGroup.removeLayer(state.area.layer);
   drawnGroup.addLayer(layer);
-  const update = () => {
+  const update = async () => {
+    const c = state.c;
+    // Area numbers add up squares month by month: they need the full squares.
+    if (!(await needDetail()) || state.c !== c) return;
     state.area = { layer, label, feature: layer.toGeoJSON() };
-    const cs = state.c.cell_size, feat = state.area.feature;
-    state.selCells = new Set(Object.keys(state.c.cells).filter((key) => {
+    const cs = c.cell_size, geom = state.area.feature.geometry;
+    state.selCells = new Set(c.cellKeys.filter((key) => {
       const [i, j] = key.split("_").map(Number);
-      return turf.booleanPointInPolygon(turf.point([(j + 0.5) * cs, (i + 0.5) * cs]), feat);
+      return insideShape((j + 0.5) * cs, (i + 0.5) * cs, geom);
     }));
     if (!state.selCells.size) toast("No fire squares inside this area. Try a bigger area inside " + countryName());
     render();

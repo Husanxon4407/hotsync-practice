@@ -70,6 +70,10 @@ python -m http.server 8000             # then open http://localhost:8000
 `.env` (never committed) holds one line: `FIRMS_MAP_KEY=your_key` (free key:
 https://firms.modaps.eosdis.nasa.gov/api/map_key/). On GitHub the same key is the secret `FIRMS_MAP_KEY`.
 
+**Fast loading:** the site downloads under 1 MB on the first visit (World). The month-by-month map squares
+(4 MB for World) come later in the background and are only needed for other dates, a drawn area or a square's popup.
+`python process_all.py --repack` turns old one-file country JSONs into this two-file form (and checks every file).
+
 **When a year ends** (e.g. 2026): download its yearly FIRMS zips (`download_firms.py`, add the year), run
 `process_all.py --all` so it becomes fixed history, and set `HISTORY_END` in `update_recent.py` / `MODIS_YEARS`,
 `VIIRS_YEARS` in `process_all.py` to the new year. The robot then continues with the next year.
@@ -86,6 +90,7 @@ https://firms.modaps.eosdis.nasa.gov/api/map_key/). On GitHub the same key is th
 | `check_all_countries.py` | checks every country file |
 | `.github/workflows/update.yml` | runs the robot every 2 days |
 | `web/` | the website (`index.html`, `app.js`, `style.css`, `data/`) |
+| `web/data/country/` | two files per place: `<slug>.json` (small, opens the page at once) and `<slug>.cells.gz` (all map squares month by month, packed; loads in the background) |
 | `HOTSYNC_PLAN.md`, `PROGRESS.md` | the plan and what was done, step by step |
 
 ## Data and sources
@@ -96,7 +101,7 @@ https://firms.modaps.eosdis.nasa.gov/api/map_key/). On GitHub the same key is th
 - [NASA GIBS](https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api):
   satellite pictures (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour) and daily fire-dot layers.
 - [Natural Earth](https://www.naturalearthdata.com/): country borders (1:50m). Map tiles: © OpenStreetMap contributors.
-- Website: Leaflet 1.9.4, Leaflet-Geoman 2.17.0, Turf.js 7.1.0, Chart.js 4.4.1, PapaParse 5.4.1, Inter font.
+- Website: Leaflet 1.9.4, Leaflet-Geoman 2.17.0, Chart.js 4.4.1, PapaParse 5.4.1, Inter font.
   Processing: Python with pandas, NumPy, PyArrow, Shapely, Matplotlib. Colours: ColorBrewer (YlOrRd, RdBu).
 
 We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS)

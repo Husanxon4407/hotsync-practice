@@ -45,7 +45,7 @@ data).
 free, and that keeps itself up to date.
 
 **Tools.** Python (pandas, NumPy, PyArrow, Shapely, Matplotlib), GitHub Actions and GitHub Pages; website in plain
-HTML/CSS/JavaScript with Leaflet, Leaflet-Geoman, Turf.js, Chart.js and PapaParse.
+HTML/CSS/JavaScript with Leaflet, Leaflet-Geoman, Chart.js and PapaParse.
 
 ## Use of AI
 
@@ -64,7 +64,7 @@ validation numbers, a check script for every country). No AI-generated images, v
 - Natural Earth country borders (1:50m): https://www.naturalearthdata.com/
 - OpenStreetMap map tiles: https://www.openstreetmap.org/copyright
 - Libraries: Leaflet https://leafletjs.com, Leaflet-Geoman https://github.com/geoman-io/leaflet-geoman,
-  Turf.js https://turfjs.org, Chart.js https://www.chartjs.org, PapaParse https://www.papaparse.com,
+  Chart.js https://www.chartjs.org, PapaParse https://www.papaparse.com,
   pandas https://pandas.pydata.org, NumPy https://numpy.org, PyArrow https://arrow.apache.org,
   Shapely https://shapely.readthedocs.io, Matplotlib https://matplotlib.org, ColorBrewer https://colorbrewer2.org
 - Code and live site: https://github.com/Husanxon4407/hotsync-practice · https://husanxon4407.github.io/hotsync-practice/

@@ -11,7 +11,7 @@ file for the website:
     4. RATES     the "exchange rate" VIIRS / MODIS for each calendar month
     5. HARMONIZE H = rate x MODIS before Feb 2012, H = VIIRS after
     6. VALIDATE  hide 2012-2014, predict it from MODIS, compare with real VIIRS
-    7. EXPORT    web/data/country/<slug>.json (+ dots for showcase countries)
+    7. EXPORT    web/data/country/<slug>.json + <slug>.cells.gz (map squares)
                  and a check image in D:\\hotsync_data\\checks
 
 Why year by year? Big countries are BIG (Brazil: ~1.5 million VIIRS fires
@@ -30,6 +30,7 @@ Run:
 """
 
 import argparse
+import gzip
 import json
 import math
 import re
@@ -757,12 +758,149 @@ def check_image(name, monthly, rates, terra_rates, pairs, validation):
     return path
 
 
-def export_country(name, agg, global_rate, global_terra, image=False):
-    """Write the country JSON (and check image). Returns a summary."""
-    data, monthly, pairs = build_json(name, agg, global_rate, global_terra)
+# ---------------------------------------------------------------------------
+# FAST LOADING (Stage 8 speed fix): every place is written as TWO files.
+#   <slug>.json      small: totals, daily numbers, rates ... and ONE total per
+#                    map square for the first view (QUICK_FROM -> last month).
+#                    The page is fully usable with only this file.
+#   <slug>.cells.gz  all squares month by month, packed (see pack_cells).
+#                    Loaded in the background; needed only when the user
+#                    changes the dates, draws an area or opens a square.
+# ---------------------------------------------------------------------------
+QUICK_FROM = "2001-01"             # = DEFAULT_FROM in web/app.js
+CELLS_FORMAT = 1
+
+
+def _varints(values):
+    """Unsigned numbers -> LEB128 bytes (small numbers take 1 byte)."""
+    out = bytearray()
+    for x in values:
+        x = int(x)
+        while x >= 128:
+            out.append((x & 127) | 128)
+            x >>= 7
+        out.append(x)
+    return out
+
+
+def pack_cells(cells):
+    """{"i_j": [[month_index, modis, viirs, h, frp_m, frp_v], ...]} -> bytes.
+
+    Layout (all LEB128 numbers, then gzip):
+      format, number of squares,
+      per square: zigzag(i), zigzag(j), number of rows,
+      then 6 columns over all rows (square by square, in the order above):
+      month_index step from the previous row of that square, modis, viirs,
+      round(h x 10), frp_modis, frp_viirs.
+    Columns of similar numbers squeeze much better than JSON text.
+    """
+    zig = lambda x: (x << 1) ^ (x >> 63)
+    head = [CELLS_FORMAT, len(cells)]
+    cols = [[] for _ in range(6)]
+    for key, rows in cells.items():
+        i, j = map(int, key.split("_"))
+        head += [zig(i), zig(j), len(rows)]
+        prev = 0
+        for r in rows:
+            cols[0].append(r[0] - prev)
+            prev = r[0]
+            cols[1].append(r[1])
+            cols[2].append(r[2])
+            cols[3].append(round((r[3] or 0) * 10))
+            cols[4].append(r[4] or 0)
+            cols[5].append(r[5] or 0)
+    raw = _varints(head) + b"".join(_varints(c) for c in cols)
+    return gzip.compress(bytes(raw), 9, mtime=0)   # mtime=0: same data, same file
+
+
+def write_country_files(data):
+    """Write <slug>.json (small) + <slug>.cells.gz. `data` is not changed."""
+    slug = data["slug"]
+    months = data["months"]
+    q0 = months.index(QUICK_FROM) if QUICK_FROM in months else 0
+    quick = {}
+    for key, rows in data["cells"].items():
+        m = v = h = 0
+        for r in rows:
+            if r[0] >= q0:
+                m += r[1]; v += r[2]; h += r[3] or 0
+        quick[key] = [m, v, short(h)]
+    small = {k: x for k, x in data.items() if k not in ("cells", "cell_fields")}
+    small["cell_quick"] = {"from": months[q0], "to": months[-1],
+                           "fields": ["modis", "viirs", "harmonized"],
+                           "squares": quick}
+    small["cells_file"] = f"{slug}.cells.gz"
+    small["cell_fields"] = data.get("cell_fields")
     OUT_COUNTRY.mkdir(parents=True, exist_ok=True)
-    out = OUT_COUNTRY / f"{data['slug']}.json"
-    out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    (OUT_COUNTRY / f"{slug}.cells.gz").write_bytes(pack_cells(data["cells"]))
+    out = OUT_COUNTRY / f"{slug}.json"
+    out.write_text(json.dumps(small, separators=(",", ":")), encoding="utf-8")
+    return out
+
+
+def unpack_cells(blob):
+    """The reverse of pack_cells (used by the self-test in --repack)."""
+    raw = gzip.decompress(blob)
+    pos = 0
+
+    def nxt():
+        nonlocal pos
+        x = shift = 0
+        while True:
+            b = raw[pos]
+            pos += 1
+            x |= (b & 127) << shift
+            shift += 7
+            if b < 128:
+                return x
+    unzig = lambda x: (x >> 1) ^ -(x & 1)
+    assert nxt() == CELLS_FORMAT
+    heads = [(unzig(nxt()), unzig(nxt()), nxt()) for _ in range(nxt())]
+    total = sum(n for _, _, n in heads)
+    cols = [[nxt() for _ in range(total)] for _ in range(6)]
+    cells, k = {}, 0
+    for i, j, n in heads:
+        rows, prev = [], 0
+        for _ in range(n):
+            prev += cols[0][k]
+            rows.append([prev, cols[1][k], cols[2][k], short(cols[3][k] / 10),
+                         cols[4][k], cols[5][k]])
+            k += 1
+        cells[f"{i}_{j}"] = rows
+    return cells
+
+
+def run_repack():
+    """Turn old one-file JSONs (with "cells") into the two-file form.
+
+    No zips needed: it reads web/data/country/*.json. Checks every packed
+    file by unpacking it again and comparing with the original squares.
+    """
+    t0, n, before, after = time.time(), 0, 0, 0
+    for path in sorted(OUT_COUNTRY.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if "cells" not in data:
+            continue
+        before += len(gzip.compress(path.read_bytes(), 6))
+        write_country_files(data)
+        blob = (OUT_COUNTRY / f"{data['slug']}.cells.gz").read_bytes()
+        back = unpack_cells(blob)
+        same = all(
+            [r[0], r[1], r[2], short(r[3] or 0), r[4] or 0, r[5] or 0] == b
+            for key, rows in data["cells"].items()
+            for r, b in zip(rows, back[key])) and back.keys() == data["cells"].keys()
+        if not same:
+            sys.exit(f"{path.name}: packed squares do not match - stopped")
+        after += len(gzip.compress(path.read_bytes(), 6)) + len(blob)
+        n += 1
+    print(f"Repacked {n} files in {time.time() - t0:.0f} s, all checked. "
+          f"Download size (gzip): {before / 1e6:.0f} MB -> {after / 1e6:.0f} MB")
+
+
+def export_country(name, agg, global_rate, global_terra, image=False):
+    """Write the country files (and check image). Returns a summary."""
+    data, monthly, pairs = build_json(name, agg, global_rate, global_terra)
+    out = write_country_files(data)
     path = (check_image(name, monthly, data["rates"], data["rates_terra"],
                         pairs, data["validation"]) if image else None)
     return {"data": data, "monthly": monthly, "json": out, "image": path}
@@ -1047,8 +1185,7 @@ def build_world(aggs, global_rate, global_terra):
                         "frp_modis_mw", "frp_viirs_mw"],
         "cells": cells,
     }
-    out = OUT_COUNTRY / "world.json"
-    out.write_text(json.dumps(data, separators=(",", ":")), encoding="utf-8")
+    out = write_country_files(data)
     total_h = sum(h for h in data["totals"]["harmonized"] if h)
     print(f"World: {len(aggs)} countries, {size} deg squares ({len(cells)} squares), "
           f"{out.stat().st_size / 1e6:.1f} MB, {time.time() - t0:.0f} s")
@@ -1089,9 +1226,13 @@ def main():
                     help="re-read the zips, don't reuse saved work")
     ap.add_argument("--world", action="store_true",
                     help="rebuild only world.json from saved work")
+    ap.add_argument("--repack", action="store_true",
+                    help="split old country JSONs into .json + .cells.gz")
     args = ap.parse_args()
     config.make_folders()
-    if args.world:
+    if args.repack:
+        run_repack()
+    elif args.world:
         run_world()
     elif args.country:
         run_one(args.country, args.fresh)

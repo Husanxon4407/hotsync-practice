@@ -17,19 +17,18 @@
 </script>
 
 <!-- Font + libraries from public CDNs (nothing to install), exact versions.
-     Leaflet = map, Leaflet-Geoman = drawing on the map, Turf = "is this point
-     inside the drawn area?", Chart.js = line charts, PapaParse = CSV files. -->
+     "defer": the page draws first, the libraries run (in this order) after.
+     Leaflet = map, Leaflet-Geoman = drawing on the map, Chart.js = line charts, PapaParse = CSV files. -->
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@turf/turf@7.1.0/turf.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115a">
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<link rel="stylesheet" href="style.css?v=20261115b">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -410,7 +409,7 @@
       <div>
         <h3>Tools</h3>
         <ul>
-          <li>Website: <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> 1.9.4, <a href="https://github.com/geoman-io/leaflet-geoman" target="_blank" rel="noopener">Leaflet-Geoman</a> 2.17.0, <a href="https://turfjs.org/" target="_blank" rel="noopener">Turf.js</a> 7.1.0, <a href="https://www.chartjs.org/" target="_blank" rel="noopener">Chart.js</a> 4.4.1, <a href="https://www.papaparse.com/" target="_blank" rel="noopener">PapaParse</a> 5.4.1, font <a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener">Inter</a></li>
+          <li>Website: <a href="https://leafletjs.com/" target="_blank" rel="noopener">Leaflet</a> 1.9.4, <a href="https://github.com/geoman-io/leaflet-geoman" target="_blank" rel="noopener">Leaflet-Geoman</a> 2.17.0, <a href="https://www.chartjs.org/" target="_blank" rel="noopener">Chart.js</a> 4.4.1, <a href="https://www.papaparse.com/" target="_blank" rel="noopener">PapaParse</a> 5.4.1, font <a href="https://fonts.google.com/specimen/Inter" target="_blank" rel="noopener">Inter</a></li>
           <li>Processing: Python with <a href="https://pandas.pydata.org/" target="_blank" rel="noopener">pandas</a>, <a href="https://numpy.org/" target="_blank" rel="noopener">NumPy</a>, <a href="https://arrow.apache.org/docs/python/" target="_blank" rel="noopener">PyArrow</a>, <a href="https://shapely.readthedocs.io/" target="_blank" rel="noopener">Shapely</a>, <a href="https://matplotlib.org/" target="_blank" rel="noopener">Matplotlib</a></li>
           <li>Colour ramps: <a href="https://colorbrewer2.org/" target="_blank" rel="noopener">ColorBrewer</a> (YlOrRd, RdBu), colour-blind friendly</li>
           <li>Code written with help from AI (Claude Code). The idea and the method choices are the team's.</li>
@@ -430,6 +429,6 @@
 <div class="toast" id="toast" role="status"></div>
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
-<script src="app.js?v=20261115a"></script>
+<script defer src="app.js?v=20261115b"></script>
 </body>
 </html>
