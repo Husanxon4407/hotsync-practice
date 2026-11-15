@@ -6,7 +6,7 @@
     fires were counted (real numbers: data/countries.json)
   - two satellites on polar orbits, like the real ones: MODIS (orange) and
     VIIRS (purple), the same colours as in the charts
-  - a soft ember glow behind the planet
+  - the same space look as the home page: stars, lights, size and place
   It starts after the map has loaded, draws at most 30 frames a second, and
   stops when the tab is hidden, when the map is full screen or while printing.
   "Reduce motion": one still picture. No WebGL: nothing (the page is the same).
@@ -50,44 +50,38 @@ async function start() {
 
   let raf = 0, last = 0, t = 0, ready = false;       // (declared first: a cached picture can arrive at once)
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
-  camera.position.z = 9;
-  scene.add(new THREE.AmbientLight(0x8fa6c4, 1.25));
-  const sun = new THREE.DirectionalLight(0xfff1e0, 2.2);
-  sun.position.set(-4, 3, 5);
-  scene.add(sun);
+  // the same camera and lights as the home page Earth (home/earth.js)
+  const camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
+  camera.position.z = 8;
+  scene.add(new THREE.AmbientLight(0x7799bd, 1.7));
+  const key = new THREE.DirectionalLight(0xe6f3ff, 2.8);
+  key.position.set(-3, 4, 5);
+  const rimLight = new THREE.DirectionalLight(0x3579c9, 0.65);
+  rimLight.position.set(4, -1, -2);
+  scene.add(key, rimLight);
+
+  // faint stars, the same sky as on the home page
+  const starPos = [];
+  const rnd = (i) => { const n = Math.sin(i * 127.1) * 43758.5453; return n - Math.floor(n); };
+  for (let i = 0; i < 260; i++) starPos.push((rnd(i + 1) - 0.5) * 36, (rnd(i + 500) - 0.5) * 24, -10 - rnd(i + 900) * 10);
+  const starGeo = new THREE.BufferGeometry();
+  starGeo.setAttribute("position", new THREE.Float32BufferAttribute(starPos, 3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0x8cabc9, size: 0.018, transparent: true, opacity: 0.45 })));
 
   // everything that turns with the Earth is in "world"; the orbits are separate
   const planet = new THREE.Group();
-  planet.rotation.z = deg(-18);                             // a little tilt looks natural
+  planet.rotation.z = 0.12;                                  // the same tilt as the home page
   scene.add(planet);
   const world = new THREE.Group();
   planet.add(world);
 
-  // the ember glow behind the planet ("prism" of warm light)
-  const glow = new THREE.Sprite(new THREE.SpriteMaterial({
-    map: glowTexture("rgba(255,138,61,0.55)", "rgba(255,106,31,0.18)"), transparent: true, depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  }));
-  glow.scale.setScalar(4.6);
-  glow.position.z = -1.2;
-  planet.add(glow);
-
   // the Earth
-  const mat = new THREE.MeshPhongMaterial({ shininess: 10, specular: 0x1d2a3a, color: 0xc9d3de });
-  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 64, 48), mat);
+  const mat = new THREE.MeshPhongMaterial({ shininess: 12, specular: 0x233449 });
+  const earth = new THREE.Mesh(new THREE.SphereGeometry(1, 80, 64), mat);
   world.add(earth);
   const loader = new THREE.TextureLoader();
   loader.load("intro/earth.jpg", (t) => { t.colorSpace = THREE.SRGBColorSpace; mat.map = t; mat.needsUpdate = true; draw(); });
-  loader.load("intro/earth-normal.jpg", (t) => { mat.normalMap = t; mat.normalScale = new THREE.Vector2(0.3, 0.3); mat.needsUpdate = true; });
-
-  // thin blue rim (atmosphere): a slightly bigger sphere, seen from inside
-  const rim = new THREE.Mesh(new THREE.SphereGeometry(1.06, 48, 32), new THREE.ShaderMaterial({
-    transparent: true, side: THREE.BackSide, depthWrite: false, blending: THREE.AdditiveBlending,
-    vertexShader: "varying vec3 n; void main(){ n = normalize(normalMatrix * normal); gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }",
-    fragmentShader: "varying vec3 n; void main(){ float a = pow(0.72 - dot(n, vec3(0.0,0.0,1.0)), 3.0); gl_FragColor = vec4(0.45,0.7,1.0,1.0) * a; }",
-  }));
-  planet.add(rim);
+  loader.load("intro/earth-normal.jpg", (t) => { mat.normalMap = t; mat.normalScale = new THREE.Vector2(0.35, 0.35); mat.needsUpdate = true; });
 
   // fire points: one per country, size + brightness from its real fire total
   const fireTex = glowTexture("rgba(255,236,200,1)", "rgba(255,106,31,0.65)");
@@ -157,10 +151,11 @@ async function start() {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    // the planet sits to the right (on phones: lower, smaller), partly off screen
-    const hh = Math.tan(deg(18)) * 9, hw = hh * camera.aspect, phone = w < 760;
-    planet.position.set(phone ? hw * 0.35 : hw * 0.62, phone ? -hh * 0.55 : -hh * 0.05, 0);
-    planet.scale.setScalar(phone ? hh * 0.42 : Math.min(hh * 0.62, hw * 0.4));
+    const hh = Math.tan(deg(19)) * 8, hw = hh * camera.aspect, phone = w <= 700;
+    // Bigger than on the home page (asked by the user), partly off the right
+    // edge, so the cards and their numbers stay in front and in focus.
+    planet.position.set(phone ? hw * 0.25 : hw * 0.62, phone ? -hh * 0.3 : -hh * 0.08, 0);
+    planet.scale.setScalar(phone ? Math.min(hw * 0.95, hh * 0.5) : Math.min(hh * 1.05, hw * 0.62));
     fireMat.uniforms.scale.value = h / 2;
     draw();
   }
@@ -170,7 +165,7 @@ async function start() {
     document.documentElement.classList.contains("report") || !!document.querySelector(".map-wrap.is-full");
   function draw() {
     if (!ready) return;                                      // not set up yet
-    world.rotation.y = 0.9 + t * 0.035;
+    world.rotation.y = 2.4 + t * 0.055;                     // the home page's speed
     fireMat.uniforms.time.value = t;
     for (const s of sats) {
       const a = s.phase + t * s.speed;

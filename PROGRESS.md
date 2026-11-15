@@ -243,3 +243,6 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   reduced motion = one still picture; no WebGL = nothing. Cards are 86% opaque so it shows faintly.
 - The website is now called PyroVision (all visible text, README, SUBMISSION). Internal names (repo, files,
   saved theme key) stay the same. README screenshot (assets/screenshot.jpg) still shows the old name.
+- Update (user): the map page now looks like the home page: deep-space gradient + stars, the same Earth lights,
+  bigger planet on the right (partly off screen), no ember glow. Cards 91% opaque so the data stays in focus.
+  Home page: the dark-to-white gap between the hero and the summary is removed.

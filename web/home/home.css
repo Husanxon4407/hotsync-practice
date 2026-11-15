@@ -125,7 +125,8 @@ html.map-open, html.map-open body { overflow: hidden; background: #141210; }
   background-position: center; background-size: cover; box-shadow: none;
 }
 
-/* ============================================================ 2. TRANSITION */
+/* ============================================================ 2. TRANSITION
+   (removed at the user's request: the summary starts right under the hero) */
 .earth-next {
   position: relative; display: block; width: 100%; height: 60svh; min-height: 360px; margin: 0; padding: 0; border: 0;
   background: linear-gradient(to bottom, #020914 0%, #252b37 18%, #656a73 40%, #b9bbc0 66%, #ededee 85%, #fff 100%);

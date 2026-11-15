@@ -1476,11 +1476,18 @@ html.report .map-hint { display: none !important; }
    the planet shows faintly behind them.
    ================================================================ */
 .bg-scene { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1.8s ease; }
-.bg-scene.on { opacity: .85; }
+.bg-scene.on { opacity: 1; }
 .bg-scene canvas { display: block; width: 100%; height: 100%; }
 :root[data-theme="light"] .bg-scene.on { opacity: .55; }
 @media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .bg-scene.on { opacity: .55; } }
-.card { background: color-mix(in srgb, var(--card) 86%, transparent); }
+.card { background: color-mix(in srgb, var(--card) 91%, transparent); }   /* the data stays in focus */
 .controls.filters.as-panel, .rate-pop { background: var(--card-solid); }
 html.report .bg-scene { display: none !important; }
 @media print { .bg-scene { display: none !important; } }
+
+/* Dark mode: the same deep-space background as the home page hero */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) body { background: radial-gradient(ellipse at 65% 40%, #10243c 0%, #050f20 45%, #020914 80%) fixed; }
+}
+:root[data-theme="dark"] body { background: radial-gradient(ellipse at 65% 40%, #10243c 0%, #050f20 45%, #020914 80%) fixed; }
+html.report body { background: #fff !important; }

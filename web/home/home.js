@@ -10,7 +10,7 @@
   - The map tells us its view (postMessage), so the visible address is always
     the exact view people can share.
 */
-import { createEarth } from "./earth.js?v=20261115h2";
+import { createEarth } from "./earth.js?v=20261115h3";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
