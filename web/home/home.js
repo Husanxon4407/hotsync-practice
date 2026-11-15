@@ -1,5 +1,5 @@
 /*
-  HotSync home page: home.js
+  PyroVision home page: home.js
   Home <-> map navigation.
   - Every link with data-map opens the map: the address gets ?view=explore
     (a top-5 row also gets its #c=... view), a new history entry is added,
@@ -10,7 +10,7 @@
   - The map tells us its view (postMessage), so the visible address is always
     the exact view people can share.
 */
-import { createEarth } from "./earth.js?v=20261115h1";
+import { createEarth } from "./earth.js?v=20261115h2";
 
 const $ = (id) => document.getElementById(id);
 const root = document.documentElement;
@@ -21,7 +21,7 @@ const wantsMap = (url = location) => new URLSearchParams(url.search).get("view")
 // ---------------------------------------------------------------- home
 function showHome() {
   root.classList.remove("map-open");
-  document.title = "HotSync · Fire on Earth, counted fairly";
+  document.title = "PyroVision · Fire on Earth, counted fairly";
   $("homeRoot").inert = false;
   if (frame) { frame.remove(); frame = null; }          // free the map
   if (!earthScene) {
@@ -40,12 +40,12 @@ function showMap() {
   if (earthScene) { earthScene.destroy(); earthScene = null; }   // release the 3D scene
   root.classList.add("map-open");
   $("homeRoot").inert = true;                           // hidden from Tab and screen readers
-  document.title = "HotSync · Fire map";
+  document.title = "PyroVision · Fire map";
   const src = "map.html" + (location.hash.startsWith("#c=") ? location.hash : "");
   if (!frame) {
     frame = document.createElement("iframe");
     frame.className = "map-frame";
-    frame.title = "HotSync fire map and satellite dashboard";
+    frame.title = "PyroVision fire map and satellite dashboard";
     frame.allow = "clipboard-write; fullscreen";        // Share copies the link; map full screen
     frame.setAttribute("allowfullscreen", "");
     frame.src = src;

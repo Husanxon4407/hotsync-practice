@@ -1,5 +1,5 @@
 /*
-  HotSync home page: home.css
+  PyroVision home page: home.css
   Hero (space + 3D Earth), the dark-to-white transition, and the summary.
   Only the home page uses this file; the map (map.html) keeps its own style.css
   and runs in an iframe, so nothing leaks either way.

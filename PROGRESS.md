@@ -234,3 +234,12 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   August, 2001*, rate 4.3 = the World view). The robot runs it after each update (update.yml adds the file).
 - Earth pictures (user choice): NASA Blue Marble from three-globe@2.31.1 -> web/intro/earth.jpg; normal map
   made from its height map (make_intro_images.py).
+
+---
+## 2026-11-15 · 3D background on the map page + new name PyroVision (asked by the user)
+- js/bg-scene.js: behind the map page, a faint turning Earth (the home page picture) with a glowing fire point
+  per country (size from countries.json total_H), two satellites on polar orbits (MODIS orange, VIIRS purple)
+  and an ember glow. Starts after load, max 30 fps, stops when the tab is hidden / map full screen / printing;
+  reduced motion = one still picture; no WebGL = nothing. Cards are 86% opaque so it shows faintly.
+- The website is now called PyroVision (all visible text, README, SUBMISSION). Internal names (repo, files,
+  saved theme key) stay the same. README screenshot (assets/screenshot.jpg) still shows the old name.

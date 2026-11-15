@@ -1,5 +1,5 @@
 /*
-  HotSync: app.js  (Stage 4: website core)
+  PyroVision: app.js  (Stage 4: website core)
 
   Reads the files that process_all.py made:
     data/countries.json          list of countries (for the country picker)

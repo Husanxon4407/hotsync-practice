@@ -1,5 +1,5 @@
 /*
-  HotSync: js/place-picker.js  (control box, step 1 "Place")
+  PyroVision: js/place-picker.js  (control box, step 1 "Place")
   A custom drop-down list for the place field (no library):
   - click / focus the field: the list opens (fade + slide) with "World" on
     top and then ALL countries A-Z, and the text is selected, so typing

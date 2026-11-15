@@ -1,5 +1,5 @@
 /*
-  HotSync: js/place-search.js
+  PyroVision: js/place-search.js
   Finds places by name. Used by the place list (place-picker.js) and by the
   search box of the globe (globe-picker.js), so both find the same things.
 

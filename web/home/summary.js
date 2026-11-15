@@ -1,5 +1,5 @@
 /*
-  HotSync home page: summary.js
+  PyroVision home page: summary.js
   "Fire on Earth, in short": loads data/home-summary.json (made by
   home_summary.py with the same rules as the map page) and draws the 4 big
   numbers, the year chart, the top 5 countries and the exchange rate.

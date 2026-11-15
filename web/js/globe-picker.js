@@ -1,5 +1,5 @@
 /*
-  HotSync: js/globe-picker.js  (control box, step 1 "Place": "Find on globe")
+  PyroVision: js/globe-picker.js  (control box, step 1 "Place": "Find on globe")
   A 3D globe in a big window (full screen on phones) to pick a country.
 
   - Nothing is loaded with the page. The globe library (globe.gl, from a CDN)

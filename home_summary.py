@@ -1,5 +1,5 @@
 """
-HotSync: home_summary.py
+PyroVision: home_summary.py
 
 Writes web/data/home-summary.json: the few world numbers the home page shows
 (web/index.html). It is small, so the home page loads fast and never needs the

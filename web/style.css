@@ -1,5 +1,5 @@
 /*
-  HotSync: style.css
+  PyroVision: style.css
   All the looks of the page. Colours are "tokens" (named variables) on :root,
   so light and dark mode only swap the token values, not the rules.
   Chart colours were checked with a colour-blind safety validator.
@@ -1469,3 +1469,18 @@ html.report .map-hint { display: none !important; }
   .map-card > .hero .rate-badge b { font-size: 14px; }
 }
 .logo-link { display: flex; flex: none; }
+
+/* ================================================================
+   3D BACKGROUND (js/bg-scene.js): the Earth with its fires and the two
+   satellites, behind the whole page. Cards are a little see-through, so
+   the planet shows faintly behind them.
+   ================================================================ */
+.bg-scene { position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: 0; transition: opacity 1.8s ease; }
+.bg-scene.on { opacity: .85; }
+.bg-scene canvas { display: block; width: 100%; height: 100%; }
+:root[data-theme="light"] .bg-scene.on { opacity: .55; }
+@media (prefers-color-scheme: light) { :root:not([data-theme="dark"]) .bg-scene.on { opacity: .55; } }
+.card { background: color-mix(in srgb, var(--card) 86%, transparent); }
+.controls.filters.as-panel, .rate-pop { background: var(--card-solid); }
+html.report .bg-scene { display: none !important; }
+@media print { .bg-scene { display: none !important; } }

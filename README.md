@@ -1,13 +1,13 @@
-# HotSync · every fire since 2000, counted fairly
+# PyroVision · every fire since 2000, counted fairly
 
 Team **Capella** (Tashkent, Uzbekistan) · NASA Space Apps Challenge 2026 ·
 Challenge: **"Harmonization of MODIS and VIIRS Hot Spots"**
 
 **Live site:** https://husanxon4407.github.io/hotsync-practice/
 
-![HotSync: the World view](assets/screenshot.jpg)
+![PyroVision: the World view](assets/screenshot.jpg)
 
-## What HotSync is
+## What PyroVision is
 
 Two NASA satellite cameras count fires from space:
 
@@ -15,7 +15,7 @@ Two NASA satellite cameras count fires from space:
 - **VIIRS** (since January 2012) has small pixels (about 375 m) and sees about **4 times more** fires.
 
 So if you simply put their numbers next to each other, recent years always look worse than old years.
-**HotSync makes the counts fair to compare**: it converts the old MODIS counts into "VIIRS-like" counts
+**PyroVision makes the counts fair to compare**: it converts the old MODIS counts into "VIIRS-like" counts
 (a **fair count**, or *harmonized* count), for **every country, any area you draw, and the whole world**,
 from 2001 to today.
 

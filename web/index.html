@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HotSync · Fire on Earth, counted fairly</title>
-<meta name="description" content="HotSync joins two NASA fire satellites (MODIS and VIIRS) into one fair count of fires on Earth since 2001. A short summary first, then a full fire map.">
+<title>PyroVision · Fire on Earth, counted fairly</title>
+<meta name="description" content="PyroVision joins two NASA fire satellites (MODIS and VIIRS) into one fair count of fires on Earth since 2001. A short summary first, then a full fire map.">
 <link rel="icon" href="assets/capella-mark.png">
 
 <!-- Old share links (#c=... or ?view=explore) open the map at once, before
@@ -19,26 +19,26 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@500;600&display=swap">
-<link rel="stylesheet" href="home/home.css?v=20261115h1">
+<link rel="stylesheet" href="home/home.css?v=20261115h2">
 <link rel="preload" as="image" href="intro/earth.jpg">
 
 <!-- GSAP (the Earth entrance), then our scripts. Three.js is loaded by
      home/earth.js as a module, only on the home page. Exact versions. -->
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
-<script defer src="home/summary.js?v=20261115h1"></script>
-<script type="module" src="home/home.js?v=20261115h1"></script>
+<script defer src="home/summary.js?v=20261115h2"></script>
+<script type="module" src="home/home.js?v=20261115h2"></script>
 </head>
 <body class="home-active">
 
 <div class="earth-page" id="homeRoot">
 
   <!-- ============ 1. HERO: text + 3D Earth ============ -->
-  <section class="earth-hero" id="hero" aria-label="HotSync introduction">
+  <section class="earth-hero" id="hero" aria-label="PyroVision introduction">
     <div class="earth-canvas" id="earthCanvas" aria-hidden="true"></div>
     <div class="earth-fallback" id="earthFallback" aria-hidden="true" hidden></div>
 
     <header class="earth-header">
-      <a class="wordmark" href="./" aria-label="HotSync home">HotSync<span>.</span></a>
+      <a class="wordmark" href="./" aria-label="PyroVision home">PyroVision<span>.</span></a>
       <a class="map-btn header-map" href="?view=explore" data-map>Open fire map <span aria-hidden="true">↗</span></a>
     </header>
 

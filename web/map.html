@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>HotSync · Fire map</title>
-<meta name="description" content="HotSync counts every fire seen from space since 2000 in a fair way, so you can compare any month or year, for any country, area or the whole world.">
+<title>PyroVision · Fire map</title>
+<meta name="description" content="PyroVision counts every fire seen from space since 2000 in a fair way, so you can compare any month or year, for any country, area or the whole world.">
 <link rel="icon" href="assets/capella-mark.png">
 
 <!-- Set the theme BEFORE the page draws, so it doesn't flash white in dark mode.
@@ -28,16 +28,18 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115q">
+<link rel="stylesheet" href="style.css?v=20261115t">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
+<!-- 3D background: the Earth, its fires and the two satellites (js/bg-scene.js) -->
+<div class="bg-scene" id="bgScene" aria-hidden="true"></div>
 
 <!-- ============ HEADER ============ -->
 <header class="top load-in">
-  <a class="logo-link" href="./" target="_top" title="HotSync home page"><img class="logo" src="assets/capella-mark.png" alt="HotSync home page"></a>
+  <a class="logo-link" href="./" target="_top" title="PyroVision home page"><img class="logo" src="assets/capella-mark.png" alt="PyroVision home page"></a>
   <div>
-    <div class="brand"><span class="prism-text">HotSync</span></div>
+    <div class="brand"><span class="prism-text">PyroVision</span></div>
     <div class="sub">Every fire since 2000, counted fairly · Team Capella</div>
   </div>
   <nav class="sections" aria-label="Sections">
@@ -69,7 +71,7 @@
   <section class="report-only report-head" aria-hidden="true">
     <div class="rh-top">
       <img src="assets/capella-mark.png" alt="">
-      <div><div class="rh-brand">HotSync · Fire report</div><div class="rh-sub">Every fire since 2000, counted fairly · Team Capella</div></div>
+      <div><div class="rh-brand">PyroVision · Fire report</div><div class="rh-sub">Every fire since 2000, counted fairly · Team Capella</div></div>
       <div class="rh-meta" id="rhMeta"></div>
     </div>
     <div class="rh-line" id="rhLine"></div>
@@ -142,7 +144,7 @@
         <p id="summary" class="load-in" aria-live="polite"></p>
         <details class="why load-in">
           <summary>Why "fair count"?</summary>
-          <p>Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. HotSync converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
+          <p>Two NASA satellite cameras count fires from space. The newer one, <b>VIIRS</b> (since 2012), sees about 4 times more fires than the older <b>MODIS</b> (since 2000), so old and new years can't be compared directly. PyroVision converts the old counts into a <b>fair count</b>, so every year from 2001 to today can be compared.</p>
         </details>
       </div>
       <!-- The exchange rate as a small badge; the full explanation opens on click -->
@@ -414,7 +416,7 @@
   <!-- ============ HOW IT WORKS ============ -->
   <section id="how" class="card acc reveal">
     <details>
-    <summary class="acc-head"><span class="acc-title"><h2>How HotSync works</h2><span class="sec-sub" id="howCountry"></span></span><span class="acc-icon" aria-hidden="true"></span></summary>
+    <summary class="acc-head"><span class="acc-title"><h2>How PyroVision works</h2><span class="sec-sub" id="howCountry"></span></span><span class="acc-icon" aria-hidden="true"></span></summary>
     <div class="steps">
       <div class="step" style="--c:var(--modis)">
         <div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 20h14"/></svg></div>
@@ -460,7 +462,7 @@
   <!-- ============ LIMITS ============ -->
   <section id="limits" class="card acc reveal">
     <details>
-    <summary class="acc-head"><span class="acc-title"><h2>Limits</h2><span class="sec-sub">What HotSync can't tell you.</span></span><span class="acc-icon" aria-hidden="true"></span></summary>
+    <summary class="acc-head"><span class="acc-title"><h2>Limits</h2><span class="sec-sub">What PyroVision can't tell you.</span></span><span class="acc-icon" aria-hidden="true"></span></summary>
     <ul class="limits">
       <li><b>No morning VIIRS pass.</b> MODIS flies over at about 10:30 (Terra) and 13:30 (Aqua), VIIRS only at about 13:30 (and at night). Fires that burn only in the morning are seen by MODIS but not by VIIRS. The exchange rate learns this on average, but not for every single day.</li>
       <li><b>Clouds and smoke hide fires.</b> No satellite sees a fire under thick clouds or smoke, so a cloudy month can look quiet.</li>
@@ -514,7 +516,7 @@
       The <b>fair count</b> uses VIIRS from February 2012 and, before that, MODIS × the place's monthly "exchange rate" (VIIRS ÷ MODIS, learned on 2015–2025).
       Numbers are satellite hotspots (fire detections), not separate fires or burned area.</p>
     <p><b>Data.</b> NASA FIRMS: MODIS Collection 6.1 and VIIRS S-NPP 375 m active fire hotspots (yearly country files 2000–2025, FIRMS API for the current year);
-      country borders: Natural Earth; map: © OpenStreetMap contributors. Made with HotSync (NASA Space Apps 2026, Team Capella).</p>
+      country borders: Natural Earth; map: © OpenStreetMap contributors. Made with PyroVision (NASA Space Apps 2026, Team Capella).</p>
     <p class="ack">We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS) (https://earthdata.nasa.gov/firms), part of NASA's Land, Atmosphere Near real-time Capability for Earth observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science Data and Information System (ESDIS).</p>
     <p class="rh-link">Open this exact view: <span id="rhLink"></span></p>
   </section>
@@ -530,10 +532,11 @@
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
 <!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115q"></script>
-<script defer src="js/place-picker.js?v=20261115q"></script>
-<script defer src="js/globe-picker.js?v=20261115q"></script>
-<script defer src="js/date-picker.js?v=20261115q"></script>
-<script defer src="app.js?v=20261115q"></script>
+<script defer src="js/place-search.js?v=20261115t"></script>
+<script defer src="js/place-picker.js?v=20261115t"></script>
+<script defer src="js/globe-picker.js?v=20261115t"></script>
+<script defer src="js/date-picker.js?v=20261115t"></script>
+<script defer src="app.js?v=20261115t"></script>
+<script type="module" src="js/bg-scene.js?v=20261115t"></script>
 </body>
 </html>

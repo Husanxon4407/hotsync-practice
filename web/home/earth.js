@@ -1,5 +1,5 @@
 /*
-  HotSync home page: earth.js
+  PyroVision home page: earth.js
   The textured 3D Earth in the hero (Three.js), the faint stars, the entrance
   (GSAP: 7.5 s along a curve, growing to its final size), and the motion
   controls (Replay entrance, Pause/Resume motion, Escape = finish now).

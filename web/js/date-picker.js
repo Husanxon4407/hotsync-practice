@@ -1,5 +1,5 @@
 /*
-  HotSync: js/date-picker.js  (control box, step 2 "Dates")
+  PyroVision: js/date-picker.js  (control box, step 2 "Dates")
   One button ("Jan 2001 – Nov 2026"). A click opens a pop-up (laptop) or a
   sheet that slides up from the bottom (phone) with:
   - "Start: ___  End: ___" on top: you always see which one you are setting

@@ -1,20 +1,20 @@
-# HotSync: texts for the Space Apps project page (drafts, edit freely)
+# PyroVision: texts for the Space Apps project page (drafts, edit freely)
 
 ## Project Name
 
-**HotSync: every fire since 2000, counted fairly**
+**PyroVision: every fire since 2000, counted fairly**
 
 ## High-Level Summary
 
 Two NASA satellite cameras count fires from space, but the newer one (VIIRS) sees about four times more fires than the
-older one (MODIS), so fire counts from 2001 and from today cannot be compared honestly. HotSync learns a monthly
+older one (MODIS), so fire counts from 2001 and from today cannot be compared honestly. PyroVision learns a monthly
 "exchange rate" between the two cameras for every country, converts the MODIS-only years into VIIRS-like counts, and
 proves it works by hiding years and predicting them. The result is a free website with a fair fire calendar from 2001
 to today for every country, any drawn area, and the whole world, updated automatically with new NASA data.
 
 ## Detailed Description
 
-**What it does.** HotSync shows a *fire calendar* (years × months) for any country, any area you draw on the map, or
+**What it does.** PyroVision shows a *fire calendar* (years × months) for any country, any area you draw on the map, or
 the whole world, from 2001 to today. You can see how a month compares with its normal (and how a month that is still
 going compares with the same days of past years), the busiest months and years, one single day, fire dots for the
 whole planet on any day since 2000, live fires of the last 48 hours, and NASA satellite pictures. Every view can be
@@ -77,9 +77,9 @@ observations (LANCE) (https://earthdata.nasa.gov/lance) and NASA's Earth Science
 
 | Time | Picture (screen recording of the live site) | Voice |
 | --- | --- | --- |
-| 0:00 | HotSync logo, World map with fire squares | "Hi, we are Team Capella from Tashkent." |
+| 0:00 | PyroVision logo, World map with fire squares | "Hi, we are Team Capella from Tashkent." |
 | 0:02 | Calendar: switch "MODIS saw" → "VIIRS saw" (2012 suddenly jumps) | "NASA's newer satellite sees four times more fires, so old and new years can't be compared." |
-| 0:05 | Title "HotSync: every fire since 2000, counted fairly" | "This is HotSync: every fire since 2000, counted fairly." |
+| 0:05 | Title "PyroVision: every fire since 2000, counted fairly" | "This is PyroVision: every fire since 2000, counted fairly." |
 | 0:10 | Proof chart (lines overlap) → switch to "Fair count" calendar → draw a box on the map | "We learn a monthly exchange rate between the satellites for every country, prove it on hidden years, and give a fair fire calendar for any country, any area, or the whole world." |
 | 0:20 | "vs normal" view, live fires, "Copy link" | "It updates itself every two days, shows live fires, and every view can be shared." |
 | 0:25–0:30 | World view + live link | "Next: burned area, alerts and more languages. Try it: husanxon4407.github.io/hotsync-practice." |
