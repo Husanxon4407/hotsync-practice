@@ -476,7 +476,7 @@ function renderUpdated() {
   const hours = Math.max(0, (Date.now() - Date.parse(recent.meta.last_updated)) / 3600000);
   const ago = hours < 1 ? "less than 1 hour ago" : hours < 48 ? `${Math.round(hours)} h ago` : `${Math.round(hours / 24)} days ago`;
   chip.hidden = false;
-  chip.textContent = `🔄 Updated ${ago} · data to ${new Date(toUTC(recent.meta.last_day_with_data)).toLocaleDateString("en-US", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" })}`;
+  $("updatedText").textContent = `Updated ${ago} · data to ${new Date(toUTC(recent.meta.last_day_with_data)).toLocaleDateString("en-US", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" })}`;
   chip.title = `Last update: ${recent.meta.last_updated} (UTC). A robot on GitHub adds new fires from NASA FIRMS.`;
 }
 
@@ -583,8 +583,10 @@ async function copyLink() {
     document.execCommand("copy"); t.remove();
   }
   const b = $("shareBtn");
-  b.classList.add("copied"); b.textContent = "✓ Link copied";
-  setTimeout(() => { b.classList.remove("copied"); b.textContent = "🔗 Copy link"; }, 2500);
+  b.classList.add("copied"); b.textContent = "Link copied ✓";
+  setTimeout(() => { b.classList.remove("copied"); b.textContent = "Copy link"; }, 2000);
+  state.shared = true;
+  updateSteps();
   toast("Link copied: paste it anywhere to share exactly this view");
 }
 
@@ -934,8 +936,16 @@ const NEEDS_THE = /^(United|Netherlands|Philippines|Bahamas|Gambia|Maldives|Czec
 const countryName = () => (isWorld() ? "the whole world" : NEEDS_THE.test(state.c.name) ? "the " + state.c.name : state.c.name);
 const areaName = () => (state.area ? `the drawn area in ${countryName()}` : countryName());
 
+// The 3 step boxes: a step with a value gets a thin ember line on top.
+function updateSteps() {
+  $("stepPlace").classList.toggle("done", !!state.c);
+  $("stepDates").classList.toggle("done", !!(state.from && state.to));
+  $("stepShare").classList.toggle("done", !!state.shared);
+}
+
 function renderHeader() {
   const c = state.c;
+  updateSteps();
   $("heroArea").textContent = state.area ? `${c.name} · ${state.area.label}` : c.name;
   $("heroRange").textContent = `${monthShort(state.from)} – ${monthShort(state.to)}`;
   const whole = isWorld() ? "Whole world" : "Whole country";

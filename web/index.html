@@ -28,7 +28,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115c">
+<link rel="stylesheet" href="style.css?v=20261115d">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -66,32 +66,49 @@
     <div class="rh-line" id="rhLine"></div>
   </section>
 
-  <!-- ============ CONTROL BAR: country + dates (drive everything below) ============ -->
-  <section class="card controls" aria-label="Choose country and dates">
-    <div class="ctrl">
-      <label class="lbl" for="countryInput">Place</label>
-      <input id="countryInput" list="countryList" autocomplete="off" spellcheck="false"
-             placeholder="Type a country or World…" aria-describedby="countryHelp">
-      <datalist id="countryList"></datalist>
-      <span id="countryHelp" class="sr-only">Start typing, then pick a country (or World) from the list</span>
+  <!-- ============ CONTROL BOX: 3 steps (Place · Dates · Share) drive everything below ============ -->
+  <section class="card controls filters" aria-label="Choose a place and dates, then share">
+    <div class="fsteps">
+      <!-- Step 1: Place -->
+      <div class="fstep" id="stepPlace" role="group" aria-labelledby="stepPlaceLbl">
+        <div class="fstep-head"><span class="fstep-num" aria-hidden="true">1</span><label class="fstep-lbl" id="stepPlaceLbl" for="countryInput">Place</label></div>
+        <div class="fstep-body">
+          <input id="countryInput" list="countryList" autocomplete="off" spellcheck="false"
+                 placeholder="Type a country or World…" aria-describedby="countryHelp">
+          <datalist id="countryList"></datalist>
+          <span id="countryHelp" class="sr-only">Start typing, then pick a country (or World) from the list</span>
+        </div>
+        <div class="fstep-extra">
+          <span class="lbl">Area:</span> <span class="area-name" id="areaChip">Whole country</span>
+          <button class="ghost-btn" id="resetAreaBtn" type="button" hidden>Whole country</button>
+        </div>
+      </div>
+      <!-- Step 2: Dates -->
+      <div class="fstep" id="stepDates" role="group" aria-labelledby="stepDatesLbl">
+        <div class="fstep-head"><span class="fstep-num" aria-hidden="true">2</span><span class="fstep-lbl" id="stepDatesLbl">Dates</span></div>
+        <div class="fstep-body dates-body">
+          <label class="sr-only" for="fromMonth">From month</label>
+          <input type="month" id="fromMonth">
+          <span class="to" aria-hidden="true">–</span>
+          <label class="sr-only" for="toMonth">To month</label>
+          <input type="month" id="toMonth">
+          <button class="ghost-btn" id="allTimeBtn" type="button">All years</button>
+        </div>
+      </div>
+      <!-- Step 3: Share -->
+      <div class="fstep" id="stepShare" role="group" aria-labelledby="stepShareLbl">
+        <div class="fstep-head"><span class="fstep-num" aria-hidden="true">3</span><span class="fstep-lbl" id="stepShareLbl">Share</span></div>
+        <div class="fstep-body">
+          <button class="ghost-btn share-btn" id="shareBtn" type="button" title="Copy a link to exactly what you see now">Copy link</button>
+          <button class="ghost-btn share-btn" id="printBtn" type="button" title="Print a one-page fire report of this view, or save it as a PDF">Print report</button>
+        </div>
+      </div>
     </div>
-    <div class="ctrl">
-      <label class="lbl" for="fromMonth">From</label>
-      <input type="month" id="fromMonth">
-      <label class="lbl" for="toMonth">to</label>
-      <input type="month" id="toMonth">
-      <button class="ghost-btn" id="allTimeBtn" type="button">All years</button>
+    <div class="filters-foot">
+      <span class="data-status" id="updatedChip" hidden><span class="status-dot" aria-hidden="true"></span><span id="updatedText"></span></span>
+      <div class="loading" id="loading" role="status" aria-live="polite"></div>
+      <p class="howto">Pick a country and dates. Click a month or draw on the map to look closer. Share sends this exact view.</p>
     </div>
-    <div class="ctrl">
-      <span class="lbl">Area</span>
-      <span class="chip" id="areaChip">Whole country</span>
-      <span class="chip updated" id="updatedChip" hidden></span>
-      <button class="ghost-btn" id="resetAreaBtn" type="button" hidden>Whole country</button>
-    </div>
-    <button class="ghost-btn share-btn" id="shareBtn" type="button" title="Copy a link to exactly what you see now">🔗 Copy link</button>
-    <button class="ghost-btn share-btn" id="printBtn" type="button" title="Print a one-page fire report of this view, or save it as a PDF">🖨 Print report</button>
-    <div class="loading" id="loading" role="status" aria-live="polite"></div>
-    <div class="howto"><b>How to use:</b> <span>① pick a place (or World)</span> <span>② pick dates</span> <span>③ click a month in the calendar, or draw an area on the map</span> <span>④ 🔗 copy the link to share exactly this view</span></div>
   </section>
 
   <!-- ============ HERO: the story in one sentence ============ -->
@@ -450,6 +467,6 @@
 <div class="toast" id="toast" role="status"></div>
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
-<script defer src="app.js?v=20261115c"></script>
+<script defer src="app.js?v=20261115d"></script>
 </body>
 </html>
