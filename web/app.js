@@ -525,7 +525,7 @@ function writeHash() {
   if (state.live) p.set("live", "1");
   if (state.gibs.on) p.set("pic", `${PIC_CODE[state.gibs.layer]},${state.gibs.date}`);
   const cen = map.getCenter();
-  p.set("v", `${cen.lat.toFixed(2)},${cen.lng.toFixed(2)},${map.getZoom()}`);
+  p.set("v", `${cen.lat.toFixed(2)},${cen.lng.toFixed(2)},${+map.getZoom().toFixed(2)}`);
   const h = "#" + p.toString().replace(/%2C/g, ",").replace(/%3B/g, ";");
   if (h !== location.hash) history.replaceState(null, "", h);
   lastHash = h;
@@ -569,25 +569,43 @@ function applyHash(H) {
   }
 }
 
-// "Copy link" button: copy the address, with a fallback for old browsers
+// "Share this view": copy the address of exactly this view. If the browser
+// does not let us copy, the link appears in a small box to copy by hand.
+let copyTimer = 0;
 async function copyLink() {
   writeHash();
   const url = location.href;
+  let ok = false;
   try {
-    // Some browsers ask for permission and wait: give up after 1.5 s and use the old way.
+    // Some browsers ask for permission and wait: give up after 1.5 s.
     await Promise.race([navigator.clipboard.writeText(url),
       new Promise((_, no) => setTimeout(() => no(new Error("slow")), 1500))]);
+    ok = true;
   } catch (e) {
-    const t = document.createElement("textarea");
-    t.value = url; document.body.appendChild(t); t.select();
-    document.execCommand("copy"); t.remove();
+    try {                                    // the old way
+      const t = document.createElement("textarea");
+      t.value = url; t.setAttribute("readonly", ""); t.style.position = "fixed"; t.style.opacity = "0";
+      document.body.appendChild(t); t.select();
+      ok = document.execCommand("copy");
+      t.remove();
+    } catch (e2) { ok = false; }
   }
-  const b = $("shareBtn");
-  b.classList.add("copied"); b.textContent = "Link copied ✓";
-  setTimeout(() => { b.classList.remove("copied"); b.textContent = "Copy link"; }, 2000);
+  const b = $("shareBtn"), txt = $("shareBtnText");
+  if (ok) {
+    $("shareFallback").hidden = true;
+    b.classList.add("copied"); txt.textContent = "Link copied ✓";
+    clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => { b.classList.remove("copied"); txt.textContent = "Share this view"; }, 2000);
+    toast("Link copied: paste it anywhere to share exactly this view");
+  } else {
+    const f = $("shareUrl");
+    f.value = url;
+    $("shareFallback").hidden = false;
+    f.focus(); f.select();
+    toast("Copying is blocked here: the link is selected below, press Ctrl+C");
+  }
   state.shared = true;
   updateSteps();
-  toast("Link copied: paste it anywhere to share exactly this view");
 }
 
 async function start() {
@@ -604,7 +622,6 @@ async function start() {
     console.error(err);
     return;
   }
-  $("countryList").innerHTML = state.countries.map((c) => `<option value="${c.name}"></option>`).join("");
 
   // A shared link? Take its dates and views BEFORE the buttons are built.
   const H = readHash();
@@ -637,6 +654,7 @@ async function start() {
     if (readHash()) location.reload();       // another shared link pasted in
   });
   $("shareBtn").addEventListener("click", copyLink);
+  $("shareUrl").addEventListener("focus", (e) => e.target.select());
   $("printBtn").addEventListener("click", printReport);
   // Menu links scroll to their section WITHOUT replacing the shared link.
   document.querySelectorAll("nav.sections a").forEach((a) => a.addEventListener("click", (e) => {
@@ -697,41 +715,29 @@ async function chooseCountry(slug) {
 
 // ------------------------------------------------------------------ CONTROLS
 function buildControls() {
-  // Country: pick from the list (typing filters it).
-  const input = $("countryInput");
-  const pick = () => {
-    const v = input.value.trim().toLowerCase();
-    const hit = state.countries.find((c) => c.name.toLowerCase() === v);
-    if (hit && (!state.c || hit.slug !== state.c.slug)) chooseCountry(hit.slug);
+  // Step 1, Place: our own drop-down list (js/place-picker.js) and the
+  // 3D globe (js/globe-picker.js, loaded only when its button is pressed).
+  const placeOpts = {
+    getPlaces: () => state.countries,
+    getCurrent: () => state.c,
+    onPick: (slug) => chooseCountry(slug),
   };
-  input.addEventListener("change", pick);
-  // Picking from the list fires "input" without a typing type: load at once.
-  // While the user is still typing ("Niger" -> "Nigeria") we wait for Enter.
-  input.addEventListener("input", (e) => { if (!e.inputType || e.inputType === "insertReplacementText") pick(); });
-  input.addEventListener("blur", () => { if (state.c) input.value = state.c.name; });
-  input.addEventListener("focus", () => input.select());
+  HS.initPlacePicker({ input: $("countryInput"), ...placeOpts });
+  HS.initGlobePicker({ button: $("globeBtn"), ...placeOpts });
 
-  // Dates
-  const onDates = () => {
-    let a = $("fromMonth").value, b = $("toMonth").value;
-    if (!a || !b) return;
-    if (a > b) [a, b] = [b, a];   // the user swapped them: fix it...
-    state.from = a; state.to = b;
-    setupDateInputs();            // ...and show the real order in the boxes
-    state.period = { kind: "range" };
-    render();
-  };
-  $("fromMonth").addEventListener("change", onDates);
-  $("toMonth").addEventListener("change", onDates);
-  $("allTimeBtn").addEventListener("click", () => {
-    const m = state.c.months;
-    state.from = DEFAULT_FROM < m[0] ? m[0] : DEFAULT_FROM;
-    state.to = m[m.length - 1];
-    state.period = { kind: "range" };
-    setupDateInputs();
-    render();
+  // Step 2, Dates: one button + pop-up (js/date-picker.js)
+  datePicker = HS.initDatePicker({
+    button: $("dateBtn"),
+    getData: dateData,
+    onApply: (a, b) => {
+      state.from = a; state.to = b;
+      state.period = { kind: "range" };
+      setupDateInputs();
+      render();
+    },
   });
-  $("resetAreaBtn").addEventListener("click", () => { clearArea(true); render(); });
+  // "Custom area ✕": removes the area drawn on the map
+  $("areaChip").addEventListener("click", () => { clearArea(true); render(); });
 
   // Calendar mode + square mode
   makeSeg($("calSeg"), [["harmonized", "Fair count"], ["modis", "MODIS saw"], ["viirs", "VIIRS saw"], ["anomaly", "vs normal"]],
@@ -807,14 +813,26 @@ function buildControls() {
   $("gibsDate").max = dateOf(Date.now() - dayMs);   // yesterday: newer pictures don't exist yet
 }
 
+let datePicker = null;
+
+// What the date pop-up needs: newest month, the chosen dates, fires per year
+function dateData() {
+  const c = state.c, m = c.months, last = m[m.length - 1];
+  // fires per year of what is selected now (whole place or the drawn area)
+  const h = state.series ? state.series.h : c.totals.harmonized;
+  const yearTotals = {};
+  m.forEach((x, i) => {
+    const v = h[i];
+    if (v === null || v === undefined) return;
+    const y = +x.slice(0, 4);
+    yearTotals[y] = (yearTotals[y] || 0) + v;
+  });
+  const partialYear = last.slice(5) !== "12" || c.inProgress ? +last.slice(0, 4) : null;
+  return { first: m[0], last, from: state.from, to: state.to, yearTotals, partialYear };
+}
+
 function setupDateInputs() {
-  const m = state.c.months;
-  for (const id of ["fromMonth", "toMonth"]) {
-    $(id).min = m[0];
-    $(id).max = m[m.length - 1];
-  }
-  $("fromMonth").value = state.from;
-  $("toMonth").value = state.to;
+  if (datePicker) datePicker.setLabel(state.from, state.to);
   const last = dayAt(state.c.daily.modis.length - 1);
   $("dayInput").min = state.c.days_start;
   $("dayInput").max = last;
@@ -931,6 +949,30 @@ function recolor() {
   renderNormal();
 }
 
+// Big numbers count up (or down) to their new value: "449.3M", "+19%",
+// "4.3", "9.9 MW". Anything else ("August", "n/a") is just written.
+// With "reduce motion" on, the final text appears at once.
+const NUM_RE = /^([+-]?)(\d+(?:\.\d+)?)(k|M| MW|%)?$/;
+function setNum(id, text) {
+  const el = $(id), m = NUM_RE.exec(text);
+  cancelAnimationFrame(el._raf || 0);
+  if (!m) { el.textContent = text; delete el.dataset.num; return; }
+  const sign = m[1] === "-" ? -1 : 1, to = sign * parseFloat(m[2]), unit = m[3] || "";
+  const dec = (m[2].split(".")[1] || "").length;
+  const from = el.dataset.num !== undefined && el.dataset.unit === unit ? +el.dataset.num : 0;
+  el.dataset.num = to; el.dataset.unit = unit;
+  if (reduceMotion || from === to) { el.textContent = text; return; }
+  const show = (v) => (unit === "%" && Math.round(v) > 0 ? "+" : "") + v.toFixed(dec) + unit;
+  const t0 = performance.now(), dur = 650;
+  const step = (now) => {
+    // (a frame's time can be a little BEFORE t0: keep k between 0 and 1)
+    const k = Math.min(1, Math.max(0, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 3);   // ease out
+    if (k < 1) { el.textContent = show(from + (to - from) * e); el._raf = requestAnimationFrame(step); }
+    else el.textContent = text;                                           // exact final text
+  };
+  el._raf = requestAnimationFrame(step);
+}
+
 // "the United Kingdom", "the Netherlands", but "Brazil"
 const NEEDS_THE = /^(United|Netherlands|Philippines|Bahamas|Gambia|Maldives|Czech|Dominican|Central African|Democratic|Republic|Solomon|Marshall|Cayman|Falkland|Faeroe|British|Virgin|Comoros|Seychelles)/;
 const countryName = () => (isWorld() ? "the whole world" : NEEDS_THE.test(state.c.name) ? "the " + state.c.name : state.c.name);
@@ -941,6 +983,9 @@ function updateSteps() {
   $("stepPlace").classList.toggle("done", !!state.c);
   $("stepDates").classList.toggle("done", !!(state.from && state.to));
   $("stepShare").classList.toggle("done", !!state.shared);
+  if (datePicker && state.from && state.to) datePicker.setLabel(state.from, state.to);   // the Dates button
+  // What the shared link will open
+  if (state.c) $("sharePreview").textContent = `${state.c.name} · ${monthShort(state.from)} – ${monthShort(state.to)}${state.area ? " · custom area" : ""}`;
 }
 
 function renderHeader() {
@@ -948,10 +993,8 @@ function renderHeader() {
   updateSteps();
   $("heroArea").textContent = state.area ? `${c.name} · ${state.area.label}` : c.name;
   $("heroRange").textContent = `${monthShort(state.from)} – ${monthShort(state.to)}`;
-  const whole = isWorld() ? "Whole world" : "Whole country";
-  $("areaChip").textContent = state.area ? state.area.label : whole;
-  $("resetAreaBtn").textContent = whole;
-  $("resetAreaBtn").hidden = !state.area;
+  $("areaChip").hidden = !state.area;                 // "Custom area ✕" only when one is drawn
+  $("shareFallback").hidden = true;                   // the view changed: an old link is wrong now
 
   // Exchange-rate picture: 1 MODIS ring = N VIIRS dots, for YOUR dates:
   // the rate of each month in the range, weighted by its MODIS fires
@@ -970,7 +1013,7 @@ function renderHeader() {
   }
   let avg = den > 0 ? num / den : plain.length ? plain.reduce((x, y) => x + y, 0) / plain.length : 0;
   if (!Number.isFinite(avg)) avg = 0;
-  $("exNum").textContent = avg.toFixed(1);
+  setNum("exNum", avg.toFixed(1));
   const full = Math.min(12, Math.floor(avg)), part = avg - Math.floor(avg);
   let dots = "";
   for (let k = 0; k < full; k++) dots += `<span class="ex-dot" style="animation-delay:${k * 60}ms"></span>`;
@@ -998,9 +1041,9 @@ function renderRealStats() {
     if (s.modis[i] !== null) { mo += s.modis[i]; fm += s.frpM[i]; if (done) { moFull += s.modis[i]; moMonths++; } }
     if (s.viirs[i] !== null) { vi += s.viirs[i]; fv += s.frpV[i]; if (done) { viFull += s.viirs[i]; viMonths++; } }
   }
-  $("kModis").textContent = compact(mo);
+  setNum("kModis", compact(mo));
   $("kModisS").textContent = `${fmt(mo)} detections` + (moMonths ? ` · ${compact(moFull / (moMonths / 12))} per year` : "");
-  $("kViirs").textContent = vi || viMonths ? compact(vi) : "no data";
+  setNum("kViirs", vi || viMonths ? compact(vi) : "no data");
   $("kViirsS").textContent = vi || viMonths
     ? `${fmt(vi)} detections` + (viMonths ? ` · ${compact(viFull / (viMonths / 12))} per year` : "") +
       (c.months[a] < "2012-02" ? " (VIIRS starts 20 Jan 2012)" : "")
@@ -1020,7 +1063,7 @@ function renderRealStats() {
 
   // Fire strength: average fire radiative power (FRP) per detection
   const useV = vi > 0, frp = useV ? fv / vi : mo ? fm / mo : 0;
-  $("kFrp").textContent = frp ? frp.toFixed(1) + " MW" : "–";
+  setNum("kFrp", frp ? frp.toFixed(1) + " MW" : "–");
   $("kFrpS").textContent = `average per ${useV ? "VIIRS" : "MODIS"} detection` +
     (useV && mo ? ` · MODIS: ${(fm / mo).toFixed(1)} MW (bigger pixels)` : "");
 }
@@ -1033,7 +1076,7 @@ function renderCards() {
 
   // 1. Total harmonized
   const total = idx.reduce((t, i) => t + (s.h[i] || 0), 0);
-  $("kTotal").textContent = compact(total);
+  setNum("kTotal", compact(total));
   $("kTotalS").textContent = `${fmt(total)} in ${idx.length} month${idx.length === 1 ? "" : "s"}`;
 
   // 2. Busiest calendar month (average; the month in progress is left out)
@@ -1083,17 +1126,17 @@ function renderCards() {
     const rank = mine === null || !sf.D ? null : 1 + sf.vals.filter((x) => x > mine).length;
     lmName = sf.D ? `${monthLong(lm)} so far (1–${sf.D})` : `${monthLong(lm)} so far`;
     verb = "is";
-    $("kLatest").textContent = pct(an);
+    setNum("kLatest", pct(an));
     $("kLatestS").textContent = sf.D
       ? `${lmName}, vs the same days of ${NORMAL_YEARS[0]}–${NORMAL_YEARS[1]}` + (rank ? ` · ${ordinal(rank)} highest of ${sf.vals.length + 1}` : "")
       : `${monthLong(lm)} has just started: no complete day yet`;
   } else if (s.h[li] === null) {
-    $("kLatest").textContent = "n/a";
+    setNum("kLatest", "n/a");
     $("kLatestS").textContent = `${monthLong(lm)}: no data`;
   } else {
     const same = c.months.map((m, i) => [m, i]).filter(([m]) => +m.slice(5, 7) === k + 1 && m >= "2001-01" && m !== c.inProgress);
     const rank = 1 + same.filter(([, i]) => s.h[i] > s.h[li]).length;
-    $("kLatest").textContent = pct(an);
+    setNum("kLatest", pct(an));
     $("kLatestS").textContent = `${monthLong(lm)}: ${ordinal(rank)} highest ${MONTHS_LONG[k]} since 2001`;
   }
 

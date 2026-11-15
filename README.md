@@ -91,6 +91,8 @@ https://firms.modaps.eosdis.nasa.gov/api/map_key/). On GitHub the same key is th
 | `check_all_countries.py` | checks every country file |
 | `.github/workflows/update.yml` | runs the robot every 2 days |
 | `web/` | the website (`index.html`, `app.js`, `style.css`, `data/`) |
+| `web/js/` | the control box helpers: `place-search.js` (name search + short names like USA, UK), `place-picker.js` (place list), `globe-picker.js` (3D globe), `date-picker.js` (dates pop-up) |
+| `web/data/globe_countries.json` | light borders for the globe, made by `python countries.py --globe` |
 | `web/data/country/` | two files per place: `<slug>.json` (small, opens the page at once) and `<slug>.cells.gz` (all map squares month by month, packed; loads in the background) |
 | `HOTSYNC_PLAN.md`, `PROGRESS.md` | the plan and what was done, step by step |
 
@@ -102,7 +104,8 @@ https://firms.modaps.eosdis.nasa.gov/api/map_key/). On GitHub the same key is th
 - [NASA GIBS](https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api):
   satellite pictures (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour) and daily fire-dot layers.
 - [Natural Earth](https://www.naturalearthdata.com/): country borders (1:50m). Map tiles: © OpenStreetMap contributors.
-- Website: Leaflet 1.9.4, Leaflet-Geoman 2.17.0, Chart.js 4.4.1, PapaParse 5.4.1, Inter font.
+- Website: Leaflet 1.9.4, Leaflet-Geoman 2.17.0, Chart.js 4.4.1, PapaParse 5.4.1; fonts Inter, Bricolage Grotesque, IBM Plex Mono.
+- 3D globe (loaded only when "Find on globe" is pressed): globe.gl 2.32.4, NASA Blue Marble earth picture (three-globe examples), Natural Earth borders.
   Processing: Python with pandas, NumPy, PyArrow, Shapely, Matplotlib. Colours: ColorBrewer (YlOrRd, RdBu).
 
 We acknowledge the use of data and/or imagery from NASA's Fire Information for Resource Management System (FIRMS)

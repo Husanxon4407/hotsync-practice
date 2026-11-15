@@ -157,3 +157,21 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
   back: same theme, same map view. In the report the map fits the area / country / whole world.
 - Tests (Chrome): World and Uzbekistan + drawn box, dark theme: page height 967 / 942 px (A4 holds ~1054 px);
   right place/area/dates/numbers; after printing theme dark + map view restored; no console errors.
+
+---
+## 2026-11-15 · Control box redesign (phases 1-6, asked by the user before the other Stage 7 extras)
+- Phase 1: 3 step boxes (1 Place · 2 Dates · 3 Share), ember top line when a step has a value, small data status with a green dot.
+- Phase 2: own place list (`web/js/place-picker.js` + `place-search.js`): World on top then all A-Z, typing filters
+  (starts-with first, then contains; no accents; short names USA/UK/UAE/Russia/DRC...), marked letters, arrows/Enter/Esc.
+- Phase 3: "Find on globe" (`web/js/globe-picker.js`): globe.gl loaded only on click; borders = our own Natural Earth file
+  with FIRMS names (`countries.py --globe` -> `web/data/globe_countries.json`, 179 KB gz), so names always match.
+  Hover = name + fires, click = open, names by zoom without overlaps, search flies there, faint fire tint, no-WebGL message.
+- Phase 4: dates pop-up (`web/js/date-picker.js`): Start/End labels, quick buttons, years with fire bars, month grid,
+  range across years, future months locked, Apply/Reset, Esc/outside; bottom sheet on phones. Links still work.
+- Phase 5: "Custom area ✕" only when an area is drawn; "Share this view" + live preview; copy fallback box.
+- Phase 6: warm charcoal / warm paper tokens, one ember accent, 4-6 px corners, no glow/blur/gradients/emoji;
+  Bricolage Grotesque headings, IBM Plex Mono numbers; contour pattern behind the box; count-up numbers; press-down buttons.
+  Data colours (MODIS orange, VIIRS purple, fair-count green, calendar ramp) kept on purpose: they carry meaning.
+- Tests (Chrome, laptop + 380 px frame, light + dark): all phases + shared links, calendar click, map drawing,
+  print report, theme. Bugs found and fixed: list under the status line, year list scroll, count-up first frame
+  negative, phone gap from the old sticky offset, globe labels too dense, tooltip wording (2000-2025).

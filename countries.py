@@ -14,6 +14,8 @@ in two countries. A polygon is the real border, so each fire goes to one.
 
 Build the file once:
     .venv\\Scripts\\python countries.py
+Light borders for the website's 3D globe (made from the file above):
+    .venv\\Scripts\\python countries.py --globe
 """
 
 import json
@@ -183,5 +185,47 @@ def assign_country(df):
     return df.assign(country=country)
 
 
+# ---------------------------------------------------------------------------
+# build_globe_shapes(): a light copy of the borders for the website's 3D globe
+# ("Find on globe"). Same shapes and FIRMS names as above, so a click on the
+# globe always gives a name the website knows (no name guessing).
+# ---------------------------------------------------------------------------
+GLOBE_FILE = config.REPO_DIR / "web" / "data" / "globe_countries.json"
+GLOBE_SIMPLIFY = 0.04          # degrees (~4 km): fine on a globe, much smaller file
+
+
+def build_globe_shapes():
+    import re as _re
+    slug = lambda n: _re.sub(r"[^a-z0-9]+", "-", n.lower()).strip("-")   # = process_all.slug_of
+    listed = {c["slug"] for c in json.loads(
+        (config.REPO_DIR / "web" / "data" / "countries.json").read_text(encoding="utf-8"))}
+    feats = json.loads(GEOJSON.read_text(encoding="utf-8"))["features"]
+    out = []
+    for ft in feats:
+        geom = shape(ft["geometry"])
+        small = geom.simplify(GLOBE_SIMPLIFY, preserve_topology=True)
+        if small.is_empty or small.area < geom.area * 0.3:   # tiny islands: keep them
+            small = geom
+        small = shapely.set_precision(small, 0.01)
+        if small.is_empty:
+            small = geom
+        pt = geom.representative_point()          # label point: always inside the shape
+        out.append({"type": "Feature",
+                    "properties": {"slug": slug(ft["properties"]["firms"]),
+                                   "name": ft["properties"]["name"],
+                                   "has_data": slug(ft["properties"]["firms"]) in listed,
+                                   "area": round(geom.area, 2),
+                                   "lat": round(pt.y, 2), "lng": round(pt.x, 2)},
+                    "geometry": mapping(small)})
+    GLOBE_FILE.write_text(json.dumps({"type": "FeatureCollection", "features": out},
+                                     separators=(",", ":")), encoding="utf-8")
+    print(f"Saved {len(out)} globe shapes -> {GLOBE_FILE} "
+          f"({GLOBE_FILE.stat().st_size / 1e6:.2f} MB)")
+
+
 if __name__ == "__main__":
-    build_geojson()
+    import sys
+    if "--globe" in sys.argv:
+        build_globe_shapes()
+    else:
+        build_geojson()
