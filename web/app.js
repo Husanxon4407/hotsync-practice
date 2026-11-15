@@ -1248,19 +1248,25 @@ function fitCountry() {
 }
 
 // ------------------------------------------------------------------ FIRE DOTS (the map's main layer)
-// One ROUND dot per square, in the middle of the square. Bigger and brighter
-// = more fires. Only the MAIN hotspots are drawn: the places that together
-// have 80% of the fires in the chosen dates (at least 25, at most 1,500
-// dots), so the map is not covered with dots.
-const HOT_SHARE = 0.8, HOT_MIN = 25, HOT_MAX = 1500;
-const HOT_EARTH = ["#ff6a1f", "#ff9e3d", "#ffd873"];     // on the Earth picture: few -> many fires
-const HOT_STREETS = ["#f39a4a", "#dc4a1c", "#a3190b"];   // on the street map (light)
-let hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0 };
+// One ROUND dot per square, in the middle of the square. Only the STRONGEST
+// hotspots are drawn: the places that together have 60% of the fires in the
+// chosen dates (at least 25, at most 1,500 dots), so the map is not covered.
+// The level of a dot = its colour: light (fewer fires) -> dark (more fires),
+// in its own colour: fair count red, MODIS orange, VIIRS purple (the same
+// colours as in the charts). 5 steps, each step has the same number of dots.
+const HOT_SHARE = 0.6, HOT_MIN = 25, HOT_MAX = 1500;
+const HOT_RAMPS = {   // ColorBrewer single-hue ramps, light -> dark
+  harmonized: ["#fcbba1", "#fc9272", "#fb6a4a", "#de2d26", "#a50f15"],   // Reds
+  modis: ["#fdd0a2", "#fdae6b", "#fd8d3c", "#e6550d", "#a63603"],        // Oranges
+  viirs: ["#dadaeb", "#bcbddc", "#9e9ac8", "#756bb1", "#54278f"],        // Purples
+};
+const hotRamp = () => HOT_RAMPS[state.squareMode] || HOT_RAMPS.harmonized;
+let hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0, breaks: [] };
 
 function buildSquares() {
   squareLayer.clearLayers();
   squares.clear();
-  hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0 };
+  hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0, breaks: [] };
   const cs = state.c.cell_size;
   for (const key of state.c.cellKeys) {
     const [i, j] = key.split("_").map(Number);
@@ -1303,21 +1309,23 @@ function cellPx() {
 // Size + colour of every dot (also called after zooming)
 function styleDots() {
   if (!state.c || !squares.size) return;
-  const px = cellPx(), pal = state.bg === "streets" ? HOT_STREETS : HOT_EARTH;
+  const px = cellPx(), pal = hotRamp();
   const order = [];
   for (const [key, dot] of squares) {
     const show = hot.shown.has(key) && hot.max > 0;
     dot.options.interactive = show;            // hidden dots can't be clicked
     if (!show) { dot.setRadius(0); dot.setStyle({ opacity: 0, fillOpacity: 0, weight: 0 }); continue; }
-    const t = Math.sqrt(hot.vals.get(key) / hot.max);       // 0..1
-    const k = t > 0.55 ? 2 : t > 0.25 ? 1 : 0;              // 3 tones only
-    // radius: at most ~half a square, so neighbouring places stay separate dots
-    const r = Math.max(1.5, Math.min(16, px * (0.22 + 0.36 * t)));
+    const v = hot.vals.get(key), t = Math.sqrt(v / hot.max);   // 0..1 (for the size)
+    let k = 0;                                               // colour step 0..4
+    while (k < hot.breaks.length && v > hot.breaks[k]) k++;
+    // radius: big enough to see its colour (at least ~5 px across), grows
+    // when you zoom in; a stronger place is a little bigger too
+    const r = Math.max(2.6, Math.min(14, px * (0.28 + 0.3 * t)));
     const inside = !state.selCells || state.selCells.has(key);
     dot.setRadius(r);
-    // a wide, faint edge in the same colour = a soft glow, like a fire seen from space
-    dot.setStyle({ fillColor: pal[k], color: pal[k], weight: Math.max(1, r * 0.7),
-      opacity: inside ? 0.22 : 0.04, fillOpacity: inside ? 0.62 + 0.33 * t : 0.1 });
+    // thin light edge: dark dots stay visible on the dark Earth picture
+    dot.setStyle({ fillColor: pal[k], color: "#ffffff", weight: 0.6,
+      opacity: inside ? 0.55 : 0.05, fillOpacity: inside ? 0.95 : 0.1 });
     order.push([t, dot]);
   }
   order.sort((x, y) => x[0] - y[0]).forEach(([, d]) => d.bringToFront());   // big dots on top
@@ -1350,7 +1358,11 @@ function renderMap() {
       shown.add(key);
       acc += v;
     }
-    hot = { vals, max: list.length ? list[0][1] : 0, shown: off ? new Set() : shown, share: total ? acc / total : 0, n: list.length };
+    // colour steps: 5 groups with the same number of dots (smallest -> biggest)
+    const sv = [...shown].map((k) => vals.get(k)).sort((x, y) => x - y);
+    const breaks = sv.length ? [1, 2, 3, 4].map((q) => sv[Math.floor((q * sv.length) / 5) - 1] ?? sv[0]) : [];
+    hot = { vals, max: list.length ? list[0][1] : 0, shown: off ? new Set() : shown, share: total ? acc / total : 0, n: list.length, breaks,
+      lo: sv.length ? sv[0] : 0 };
     styleDots();
   }
 
@@ -1360,14 +1372,13 @@ function renderMap() {
     : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`) + (waiting ? " · loading map details…" : "");
   $("periodResetBtn").hidden = p.kind === "range";
 
-  // Legend: 3 dot sizes + how many main hotspots are shown
+  // Legend: the 5 colour steps (light -> dark) + how many hotspots are shown
   const sq = { harmonized: "fair count of fires", modis: "fires MODIS saw", viirs: "fires VIIRS saw" }[state.squareMode];
-  const pal = state.bg === "streets" ? HOT_STREETS : HOT_EARTH;
-  const dots = pal.map((col, k) => `<i class="hot-dot" style="--d:${6 + k * 4}px;background:${col}"></i>`).join("");
+  const dots = hotRamp().map((col) => `<i class="hot-dot" style="--d:11px;background:${col}"></i>`).join("");
   let leg = off ? `<span class="key">Fire dots hidden</span>`
     : waiting ? `<span class="key">Loading map details…</span>`
-    : `<span class="key"><span class="hot-key">${dots}</span> Bigger, brighter dot = more fires (${sq})</span>` +
-      `<span class="key">${fmt(hot.shown.size)} main hotspots of ${fmt(hot.n)} places with fires · together ${Math.round(hot.share * 100)}% of all fires</span>`;
+    : `<span class="key">${compact(hot.lo)} <span class="hot-key">${dots}</span> ${compact(hot.max)} ${sq} per place (light = fewer, dark = more)</span>` +
+      `<span class="key">${fmt(hot.shown.size)} strongest hotspots of ${fmt(hot.n)} places with fires · together ${Math.round(hot.share * 100)}% of all fires</span>`;
   if (state.selCells && !off) leg += `<span class="key">Only places inside your area</span>`;
   if (state.fire.on || state.live) {
     leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS fire dot</span>`;

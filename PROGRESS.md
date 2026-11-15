@@ -184,3 +184,5 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
 - Only main hotspots: the places that together hold 80% of the fires in the dates (min 25, max 1,500 dots).
 - World: whole Earth fits, thin borders. Country: zoom in, ember border, world outside darker (our borders file).
 - Sticky control box shrinks to one slim row when scrolled (laptops). Map height 500 px.
+- Update (user): only the STRONGEST hotspots = 60% of the fires; colour = level, light -> dark, in each mode's own colour
+  (fair count Reds, MODIS Oranges, VIIRS Purples, ColorBrewer, 5 steps with the same number of dots); min dot ~5 px.

@@ -370,7 +370,7 @@ h2 .num { font-size: 11px; font-weight: 700; color: #fff; background: var(--bran
 #map.map-earth { background: #0a1a2e; }            /* deep sea blue while the Earth picture loads */
 /* legend: the 3 fire-dot sizes */
 .hot-key { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle; }
-.hot-dot { display: inline-block; width: var(--d); height: var(--d); border-radius: 50%; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 0%, transparent); }
+.hot-dot { display: inline-block; width: var(--d); height: var(--d); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }
 #map.map-earth .leaflet-control-attribution { background: rgba(10, 8, 6, .6); color: #c8bfb4; }
 #map.map-earth .leaflet-control-attribution a { color: #ffb27a; }
 .leaflet-container { font: inherit; }
