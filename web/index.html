@@ -28,7 +28,7 @@
 <script defer src="https://cdn.jsdelivr.net/npm/@geoman-io/leaflet-geoman-free@2.17.0/dist/leaflet-geoman.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script defer src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<link rel="stylesheet" href="style.css?v=20261115g">
+<link rel="stylesheet" href="style.css?v=20261115j">
 </head>
 <body>
 <div class="aurora" aria-hidden="true"></div>
@@ -194,7 +194,7 @@
     <div class="card reveal">
       <div class="card-head">
         <h2><span class="num">1</span> Where the fires were</h2>
-        <span class="hint" id="mapHint">Draw an area with the tools on the left · click a square for its numbers</span>
+        <span class="hint" id="mapHint">Draw an area with the tools on the left · click a dot for its numbers</span>
       </div>
       <div class="map-wrap">
         <div id="map" role="region" aria-label="Map of fire squares"></div>
@@ -213,8 +213,13 @@
       </div>
 
       <div class="field">
-        <div class="lbl">Squares show</div>
-        <div class="seg" id="squareSeg" role="group" aria-label="What the squares show"><span class="thumb"></span></div>
+        <div class="lbl">Fire dots show</div>
+        <div class="seg" id="squareSeg" role="group" aria-label="What the fire dots show"><span class="thumb"></span></div>
+      </div>
+
+      <div class="field">
+        <div class="lbl">Background</div>
+        <div class="seg" id="bgSeg" role="group" aria-label="Map background"><span class="thumb"></span></div>
       </div>
 
       <form class="field" id="boxForm" aria-labelledby="boxTitle">
@@ -437,7 +442,7 @@
           <li><a href="https://firms.modaps.eosdis.nasa.gov/download/" target="_blank" rel="noopener">FIRMS Archive Download</a>: every single fire dot, for any area and dates</li>
           <li><a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>: satellite pictures (MODIS Terra 7-2-1, VIIRS NOAA-20 true colour) and the daily fire-dot layers for the whole planet (MODIS and VIIRS Thermal Anomalies)</li>
           <li><a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener">Natural Earth</a>: country borders (1:50m), used when processing</li>
-          <li>Map tiles: <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></li>
+          <li>Map background: NASA Blue Marble from <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api" target="_blank" rel="noopener">NASA GIBS</a>; street map and place names data <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">© OpenStreetMap contributors</a></li>
         </ul>
       </div>
       <div>
@@ -475,10 +480,10 @@
 
 <!-- ?v=... makes browsers load the new file after every update (change it each time) -->
 <!-- Small helpers for the control box (each one is a separate, small file) -->
-<script defer src="js/place-search.js?v=20261115f"></script>
-<script defer src="js/place-picker.js?v=20261115f"></script>
-<script defer src="js/globe-picker.js?v=20261115f"></script>
-<script defer src="js/date-picker.js?v=20261115f"></script>
-<script defer src="app.js?v=20261115f"></script>
+<script defer src="js/place-search.js?v=20261115j"></script>
+<script defer src="js/place-picker.js?v=20261115j"></script>
+<script defer src="js/globe-picker.js?v=20261115j"></script>
+<script defer src="js/date-picker.js?v=20261115j"></script>
+<script defer src="app.js?v=20261115j"></script>
 </body>
 </html>

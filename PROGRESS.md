@@ -175,3 +175,12 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
 - Tests (Chrome, laptop + 380 px frame, light + dark): all phases + shared links, calendar click, map drawing,
   print report, theme. Bugs found and fixed: list under the status line, year list scroll, count-up first frame
   negative, phone gap from the old sticky offset, globe labels too dense, tooltip wording (2000-2025).
+
+---
+## 2026-11-15 · Map: real Earth + round "main hotspot" dots (asked by the user)
+- Background: NASA Blue Marble (GIBS) by default; "Streets" (OpenStreetMap) in Map settings (link: bg=streets).
+  NASA place-name layer tested and NOT used (black/empty tiles at most zooms); CARTO labels need an API key now.
+- Squares -> round dots in the middle of each square, 3 warm tones, size + brightness = fires, soft glow.
+- Only main hotspots: the places that together hold 80% of the fires in the dates (min 25, max 1,500 dots).
+- World: whole Earth fits, thin borders. Country: zoom in, ember border, world outside darker (our borders file).
+- Sticky control box shrinks to one slim row when scrolled (laptops). Map height 500 px.

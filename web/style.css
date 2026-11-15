@@ -366,12 +366,19 @@ h2 .num { font-size: 11px; font-weight: 700; color: #fff; background: var(--bran
 .toggle:has(input:focus-visible) { outline: 2px solid var(--brand); outline-offset: 2px; }
 
 /* ============================================================ MAP */
-#map { height: 430px; border-radius: 12px; background: var(--chip); z-index: 0; }
+#map { height: 500px; border-radius: 6px; background: var(--chip); z-index: 0; }
+#map.map-earth { background: #0a1a2e; }            /* deep sea blue while the Earth picture loads */
+/* legend: the 3 fire-dot sizes */
+.hot-key { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle; }
+.hot-dot { display: inline-block; width: var(--d); height: var(--d); border-radius: 50%; box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 0%, transparent); }
+#map.map-earth .leaflet-control-attribution { background: rgba(10, 8, 6, .6); color: #c8bfb4; }
+#map.map-earth .leaflet-control-attribution a { color: #ffb27a; }
 .leaflet-container { font: inherit; }
-/* Dark mode map: we keep the OpenStreetMap tiles but invert their colours */
-:root[data-theme="dark"] .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9) saturate(.6); }
+/* Dark mode + "Streets" background: we keep the OpenStreetMap tiles but invert their colours
+   (the NASA Earth picture is never inverted) */
+:root[data-theme="dark"] .map-streets .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9) saturate(.6); }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9) saturate(.6); }
+  :root:not([data-theme="light"]) .map-streets .leaflet-tile-pane { filter: invert(1) hue-rotate(185deg) brightness(.85) contrast(.9) saturate(.6); }
 }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--card-solid); color: var(--ink); box-shadow: var(--shadow-lift); }
 .leaflet-popup-content-wrapper { border-radius: 12px; }
@@ -665,7 +672,13 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 650; }
   --topo: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='520' height='260' viewBox='0 0 520 260'%3E%3Cg fill='none' stroke='%23000' stroke-width='1.1'%3E%3Cpath d='M-20 60c60-40 120 30 190 0s110-50 180-10 120 20 190-10'/%3E%3Cpath d='M-20 85c70-35 125 30 195 2s115-45 175-8 125 22 190-8'/%3E%3Cpath d='M-20 112c75-30 130 28 200 4s118-40 172-6 128 24 188-6'/%3E%3Cpath d='M-20 140c80-24 132 26 204 6s120-36 170-4 130 26 186-4'/%3E%3Cpath d='M-20 170c84-18 136 24 208 8s122-30 168-2 132 28 184-2'/%3E%3Cpath d='M-20 200c88-12 140 22 212 10s124-26 166 0 134 30 182 0'/%3E%3Cellipse cx='390' cy='70' rx='46' ry='22'/%3E%3Cellipse cx='390' cy='70' rx='26' ry='11'/%3E%3Cellipse cx='120' cy='215' rx='60' ry='24'/%3E%3Cellipse cx='120' cy='215' rx='36' ry='13'/%3E%3C/g%3E%3C/svg%3E");
 }
 .fsteps, .filters-foot { position: relative; z-index: 1; }
-.fsteps { z-index: 2; }          /* the drop-down list must cover the line below */
+.fsteps { z-index: 2; }
+/* scrolled down: one slim row (app.js adds the class "slim") */
+.controls.filters.slim { padding: 6px 10px; }
+.controls.filters.slim .fstep { padding: 6px 8px; }
+.controls.filters.slim .fstep-head, .controls.filters.slim .filters-foot,
+.controls.filters.slim .share-preview, .controls.filters.slim .share-fallback { display: none; }
+.controls.filters.slim .area-chip { margin-top: 4px; }          /* the drop-down list must cover the line below */
 .fsteps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .fstep { position: relative; min-width: 0; padding: 10px 12px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--card-solid); }
 .fstep::before {

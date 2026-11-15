@@ -53,6 +53,7 @@ const state = {
   normalMonth: 12,      // "this month vs normal": calendar month 1..12 ...
   normalYear: 2025,     // ... and the year to highlight
   gibs: { on: false, layer: "MODIS_Terra_CorrectedReflectance_Bands721", date: null },
+  bg: "earth",          // map background: "earth" (NASA Blue Marble) or "streets"
 };
 
 // ------------------------------------------------------------------ HELPERS
@@ -523,6 +524,7 @@ function writeHash() {
   const f = state.fire;
   if (f.on) p.set("dots", `${f.date},${f.span},${f.modis ? "m" : ""}${f.viirs ? "v" : ""}`);
   if (state.live) p.set("live", "1");
+  if (state.bg === "streets") p.set("bg", "streets");
   if (state.gibs.on) p.set("pic", `${PIC_CODE[state.gibs.layer]},${state.gibs.date}`);
   const cen = map.getCenter();
   p.set("v", `${cen.lat.toFixed(2)},${cen.lng.toFixed(2)},${+map.getZoom().toFixed(2)}`);
@@ -630,6 +632,7 @@ async function start() {
     if (okMonth(H.to)) state.to = H.to;
     if (flip(MODE_CODE)[H.mode]) state.calMode = flip(MODE_CODE)[H.mode];
     if (flip(SQ_CODE)[H.sq]) state.squareMode = flip(SQ_CODE)[H.sq];
+    if (H.bg === "streets") state.bg = "streets";
   }
   buildControls();
   initMap();
@@ -654,6 +657,13 @@ async function start() {
     if (readHash()) location.reload();       // another shared link pasted in
   });
   $("shareBtn").addEventListener("click", copyLink);
+  // Scrolled down: the sticky control box shrinks to one slim row, so it
+  // doesn't cover the map (laptops only; on phones it doesn't stick).
+  const box = document.querySelector(".controls.filters");
+  const slim = () => box.classList.toggle("slim", window.scrollY > 120 && innerWidth > 900);
+  window.addEventListener("scroll", slim, { passive: true });
+  window.addEventListener("resize", slim);
+  slim();
   $("shareUrl").addEventListener("focus", (e) => e.target.select());
   $("printBtn").addEventListener("click", printReport);
   // Menu links scroll to their section WITHOUT replacing the shared link.
@@ -709,6 +719,7 @@ async function chooseCountry(slug) {
   buildSquares();
   fitCountry();
   render();
+  drawBorders();                            // clear border + darker world outside it
   // Now that the page is drawn, fetch the full squares in the background.
   setTimeout(() => loadDetail(data).catch((err) => console.warn(err)), 300);
 }
@@ -744,6 +755,8 @@ function buildControls() {
     state.calMode, (k) => { state.calMode = k; renderCalendar(); });
   makeSeg($("squareSeg"), [["harmonized", "Fair count"], ["modis", "MODIS saw"], ["viirs", "VIIRS saw"], ["off", "Hide"]],
     state.squareMode, (k) => { state.squareMode = k; renderMap(); });
+  makeSeg($("bgSeg"), [["earth", "Earth (NASA)"], ["streets", "Streets"]],
+    state.bg, (k) => { setBackground(k); renderMap(); });
 
   $("periodResetBtn").addEventListener("click", () => { state.period = { kind: "range" }; render(); });
 
@@ -1171,10 +1184,23 @@ function initMap() {
   map = L.map("map", { preferCanvas: true, zoomSnap: 0.5, worldCopyJump: true, scrollWheelZoom: false }).setView([41.4, 64.6], 5);
   map.on("click", () => map.scrollWheelZoom.enable());
   map.on("mouseout", () => map.scrollWheelZoom.disable());
-  baseTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  // Backgrounds (see setBackground): NASA Blue Marble, or streets (with place names).
+  // (NASA's place-name layer was tested: at most zooms it sends black or empty
+  // pictures, so it is not used.)
+  map.createPane("mask").style.zIndex = 380;       // darkens the world outside the country
+  map.createPane("borders").style.zIndex = 390;    // borders: under the fire dots (400)
+  ["mask", "borders"].forEach((p) => { map.getPane(p).style.pointerEvents = "none"; });
+  earthTiles = L.tileLayer(GIBS_WMTS + "BlueMarble_ShadedRelief_Bathymetry/default/GoogleMapsCompatible_Level8/{z}/{y}/{x}.jpeg", {
+    maxNativeZoom: 8, maxZoom: 18,
+    attribution: 'Earth: NASA Blue Marble, <a href="https://www.earthdata.nasa.gov/engage/open-data-services-software/earthdata-developer-portal/gibs-api">NASA GIBS</a>',
+  });
+  streetTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-  }).addTo(map);
+  });
+  setBackground(state.bg);
+  map.setMinZoom(1);
+  map.on("zoomend", () => styleDots());            // dots grow when you zoom in
   // Own layer ("pane") for the NASA satellite picture: above the street map,
   // below the squares and dots. (Outside the tile pane, so dark mode doesn't
   // invert the picture's colours.)
@@ -1209,30 +1235,40 @@ function initMap() {
 }
 
 function fitCountry() {
-  if (isWorld()) { map.setView([20, 10], 2); return; }
+  // World: the whole Earth fits in the map, like a flat globe.
+  if (isWorld()) { map.fitBounds([[-56, -168], [76, 178]], { animate: false }); return; }
   const [w, s, e, n] = state.c.bbox;
-  if (e - w <= 180) { map.fitBounds([[s, w], [n, e]], { padding: [10, 10] }); return; }
+  if (e - w <= 180) { map.fitBounds([[s, w], [n, e]], { padding: [14, 14] }); return; }
   // Countries across the 180° line (Russia, Fiji...) have a box around the
-  // whole world. Zoom to the half (east or west) that has most fire squares.
-  const rects = [...squares.values()];
-  const east = rects.filter((r) => r.getBounds().getCenter().lng >= 0);
-  const west = rects.filter((r) => r.getBounds().getCenter().lng < 0);
+  // whole world. Zoom to the half (east or west) that has most fire places.
+  const pts = [...squares.values()].map((d) => d.getLatLng());
+  const east = pts.filter((q) => q.lng >= 0), west = pts.filter((q) => q.lng < 0);
   const side = east.length >= west.length ? east : west;
-  map.fitBounds(side.length ? L.featureGroup(side).getBounds() : [[s, w], [n, e]], { padding: [10, 10] });
+  map.fitBounds(side.length ? L.latLngBounds(side) : [[s, w], [n, e]], { padding: [14, 14] });
 }
 
-// One rectangle per square (built once per country, re-coloured on change).
+// ------------------------------------------------------------------ FIRE DOTS (the map's main layer)
+// One ROUND dot per square, in the middle of the square. Bigger and brighter
+// = more fires. Only the MAIN hotspots are drawn: the places that together
+// have 80% of the fires in the chosen dates (at least 25, at most 1,500
+// dots), so the map is not covered with dots.
+const HOT_SHARE = 0.8, HOT_MIN = 25, HOT_MAX = 1500;
+const HOT_EARTH = ["#ff6a1f", "#ff9e3d", "#ffd873"];     // on the Earth picture: few -> many fires
+const HOT_STREETS = ["#f39a4a", "#dc4a1c", "#a3190b"];   // on the street map (light)
+let hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0 };
+
 function buildSquares() {
   squareLayer.clearLayers();
   squares.clear();
+  hot = { vals: new Map(), max: 0, shown: new Set(), share: 0, n: 0 };
   const cs = state.c.cell_size;
   for (const key of state.c.cellKeys) {
     const [i, j] = key.split("_").map(Number);
-    const rect = L.rectangle([[i * cs, j * cs], [(i + 1) * cs, (j + 1) * cs]],
-      { renderer, weight: 0.4, color: "#ffffff", fillOpacity: 0.85 });
-    rect.on("click", (e) => squarePopup(key, e.latlng));
-    squares.set(key, rect);
-    rect.addTo(squareLayer);
+    const dot = L.circleMarker([(i + 0.5) * cs, (j + 0.5) * cs],
+      { renderer, radius: 0, weight: 0, opacity: 0, fillOpacity: 0, interactive: false });
+    dot.on("click", (e) => squarePopup(key, e.latlng));
+    squares.set(key, dot);
+    dot.addTo(squareLayer);
   }
 }
 
@@ -1258,6 +1294,35 @@ function squareSum(key, a, b) {
   return out;
 }
 
+// How many screen pixels one square is wide now (dots grow when you zoom in)
+function cellPx() {
+  const c = map.getCenter(), cs = state.c.cell_size;
+  return Math.abs(map.latLngToContainerPoint([c.lat, c.lng + cs]).x - map.latLngToContainerPoint([c.lat, c.lng]).x);
+}
+
+// Size + colour of every dot (also called after zooming)
+function styleDots() {
+  if (!state.c || !squares.size) return;
+  const px = cellPx(), pal = state.bg === "streets" ? HOT_STREETS : HOT_EARTH;
+  const order = [];
+  for (const [key, dot] of squares) {
+    const show = hot.shown.has(key) && hot.max > 0;
+    dot.options.interactive = show;            // hidden dots can't be clicked
+    if (!show) { dot.setRadius(0); dot.setStyle({ opacity: 0, fillOpacity: 0, weight: 0 }); continue; }
+    const t = Math.sqrt(hot.vals.get(key) / hot.max);       // 0..1
+    const k = t > 0.55 ? 2 : t > 0.25 ? 1 : 0;              // 3 tones only
+    // radius: at most ~half a square, so neighbouring places stay separate dots
+    const r = Math.max(1.5, Math.min(16, px * (0.22 + 0.36 * t)));
+    const inside = !state.selCells || state.selCells.has(key);
+    dot.setRadius(r);
+    // a wide, faint edge in the same colour = a soft glow, like a fire seen from space
+    dot.setStyle({ fillColor: pal[k], color: pal[k], weight: Math.max(1, r * 0.7),
+      opacity: inside ? 0.22 : 0.04, fillOpacity: inside ? 0.62 + 0.33 * t : 0.1 });
+    order.push([t, dot]);
+  }
+  order.sort((x, y) => x[0] - y[0]).forEach(([, d]) => d.bringToFront());   // big dots on top
+}
+
 function renderMap() {
   if (!state.c) return;
   const [a, b] = mapRange(), off = state.squareMode === "off";
@@ -1267,25 +1332,26 @@ function renderMap() {
     loadDetail(c).then(() => { if (state.c === c) renderMap(); })
       .catch(() => toast("Could not load the map details. Check your internet and try again."));
   }
-  const f = off ? 2 : FIELD[state.squareMode] - 1;
-  const vals = new Map();
-  let max = 0;
-  if (!waiting) for (const key of squares.keys()) {
-    const v = squareSum(key, a, b)[f];
-    vals.set(key, v);
-    if ((!state.selCells || state.selCells.has(key)) && v > max) max = v;
-  }
-  const edge = css("--card-solid") || "#fff";
-  if (!waiting) for (const [key, rect] of squares) {
-    const v = vals.get(key), k = seqClass(v, max);
-    const inside = !state.selCells || state.selCells.has(key);
-    // With a satellite picture under them, squares get see-through.
-    const full = state.gibs.on ? 0.35 : 0.85;
-    rect.setStyle(k < 0 || off            // "None": hide the squares (see the picture)
-      ? { fillOpacity: 0, opacity: 0 }
-      : reportSaved   // printed report: edges in the square's own colour (no white lines)
-        ? { fillColor: SEQ[k], color: SEQ[k], weight: 0.6, opacity: inside ? 1 : 0.1, fillOpacity: inside ? (state.gibs.on ? 0.35 : 1) : 0.1 }
-        : { fillColor: SEQ[k], color: edge, weight: 0.4, opacity: inside ? 0.6 : 0.1, fillOpacity: inside ? full : 0.1 });
+  if (!waiting) {
+    const f = off ? 2 : FIELD[state.squareMode] - 1;
+    const vals = new Map(), list = [];
+    let total = 0;
+    for (const key of squares.keys()) {
+      const v = squareSum(key, a, b)[f];
+      vals.set(key, v);
+      // With a drawn area, the main hotspots are found INSIDE the area.
+      if (v > 0 && (!state.selCells || state.selCells.has(key))) { list.push([key, v]); total += v; }
+    }
+    list.sort((x, y) => y[1] - x[1]);
+    const shown = new Set();
+    let acc = 0;
+    for (const [key, v] of list) {
+      if (shown.size >= HOT_MAX || (acc >= HOT_SHARE * total && shown.size >= HOT_MIN)) break;
+      shown.add(key);
+      acc += v;
+    }
+    hot = { vals, max: list.length ? list[0][1] : 0, shown: off ? new Set() : shown, share: total ? acc / total : 0, n: list.length };
+    styleDots();
   }
 
   // "The map shows ..." text
@@ -1294,12 +1360,15 @@ function renderMap() {
     : p.kind === "month" ? monthLong(m[a]) : `${longDate(p.day)}`) + (waiting ? " · loading map details…" : "");
   $("periodResetBtn").hidden = p.kind === "range";
 
-  // Legend
-  const sq = { harmonized: "Fair count of fires", modis: "Fires MODIS saw", viirs: "Fires VIIRS saw" }[state.squareMode];
-  let leg = off ? `<span class="key">Squares hidden</span>`
+  // Legend: 3 dot sizes + how many main hotspots are shown
+  const sq = { harmonized: "fair count of fires", modis: "fires MODIS saw", viirs: "fires VIIRS saw" }[state.squareMode];
+  const pal = state.bg === "streets" ? HOT_STREETS : HOT_EARTH;
+  const dots = pal.map((col, k) => `<i class="hot-dot" style="--d:${6 + k * 4}px;background:${col}"></i>`).join("");
+  let leg = off ? `<span class="key">Fire dots hidden</span>`
     : waiting ? `<span class="key">Loading map details…</span>`
-    : `<span class="key"><span class="ramp" style="display:inline-flex">${SEQ.map((c) => `<i style="width:12px;height:10px;display:block;background:${c}"></i>`).join("")}</span> ${sq} per square of ${state.c.cell_size}° (1 → ${compact(max)})</span>`;
-  if (state.selCells && !off) leg += `<span class="key"><span class="sw" style="background:${SEQ[3]};opacity:.2"></span> outside your area</span>`;
+    : `<span class="key"><span class="hot-key">${dots}</span> Bigger, brighter dot = more fires (${sq})</span>` +
+      `<span class="key">${fmt(hot.shown.size)} main hotspots of ${fmt(hot.n)} places with fires · together ${Math.round(hot.share * 100)}% of all fires</span>`;
+  if (state.selCells && !off) leg += `<span class="key">Only places inside your area</span>`;
   if (state.fire.on || state.live) {
     leg += `<span class="key"><span class="dot" style="background:var(--modis)"></span> MODIS fire dot</span>`;
     leg += `<span class="key"><span class="dot" style="background:var(--viirs)"></span> VIIRS fire dot</span>`;
@@ -1309,6 +1378,53 @@ function renderMap() {
   renderAreaStats(a, b);
   renderFire();
   writeHash();                 // keep the shareable link up to date
+}
+
+// ------------------------------------------------------------------ BACKGROUND + BORDERS
+// Background: NASA Blue Marble (a real picture of the Earth), or the
+// OpenStreetMap street map with place names ("Streets", Map settings).
+const GIBS_WMTS = "https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/";
+let earthTiles = null, streetTiles = null;
+
+function setBackground(kind) {
+  state.bg = kind === "streets" ? "streets" : "earth";
+  for (const t of [earthTiles, streetTiles]) if (t && map.hasLayer(t)) map.removeLayer(t);
+  if (state.bg === "streets") { streetTiles.addTo(map); baseTiles = streetTiles; }
+  else { earthTiles.addTo(map); baseTiles = earthTiles; }
+  const box = map.getContainer();
+  box.classList.toggle("map-streets", state.bg === "streets");
+  box.classList.toggle("map-earth", state.bg !== "streets");
+  if (focusLayer) drawBorders();               // the border colour follows the background
+}
+
+// Country borders (our own Natural Earth file with the FIRMS names, the same
+// one the globe uses). World: thin lines. A country: a clear ember border,
+// and everything outside it darker, so only its fires stand out.
+let bordersGeo = null, borderLayer = null, focusLayer = null;
+function loadBorders() {
+  if (!bordersGeo) bordersGeo = fetch("data/globe_countries.json").then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  return bordersGeo;
+}
+async function drawBorders() {
+  const geo = await loadBorders();
+  if (!geo || !map || !state.c) return;
+  if (!borderLayer) {
+    borderLayer = L.geoJSON(geo, { pane: "borders", interactive: false,
+      style: () => ({ color: "#ffffff", weight: 0.6, opacity: 0.35, fill: false }) }).addTo(map);
+  }
+  if (focusLayer) { map.removeLayer(focusLayer); focusLayer = null; }
+  if (isWorld()) return;
+  const f = geo.features.find((x) => x.properties.slug === state.c.slug);
+  if (!f) return;                               // too small for the border map
+  const polys = f.geometry.type === "Polygon" ? [f.geometry.coordinates] : f.geometry.coordinates;
+  const ll = (ring) => ring.map(([x, y]) => [y, x]);
+  const outside = [[-85, -540], [85, -540], [85, 540], [-85, 540]];     // the whole map...
+  const mask = L.polygon([outside, ...polys.map((pg) => ll(pg[0]))],       // ...with the country cut out
+    { pane: "mask", interactive: false, stroke: false, fillColor: "#0b0908", fillOpacity: state.bg === "streets" ? 0.35 : 0.55 });
+  const rings = polys.map((pg) => pg.map(ll));
+  const halo = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: "#000", weight: 4.5, opacity: 0.4 });
+  const line = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: state.bg === "streets" ? "#c2410c" : "#ff8a4c", weight: 2, opacity: 1 });
+  focusLayer = L.layerGroup([mask, halo, line]).addTo(map);
 }
 
 async function squarePopup(key, latlng) {
