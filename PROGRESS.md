@@ -131,7 +131,7 @@ To re-process data you need the 7 GB of FIRMS zips (`python download_firms.py`) 
 **The robot** (`.github/workflows/update.yml`) runs every 2 days on `main` and needs the secret `FIRMS_MAP_KEY`
 (already set). "Run workflow" button: GitHub → Actions → Update fire data. It commits only when data changed.
 
-**Ideas not done yet (Stage 7 extras 2–7, optional):** print/PDF "Fire report", exchange-rate world map,
+**Ideas not done yet (Stage 7 extras 3–7, optional):** exchange-rate world map,
 fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
 **Year end:** see README "When a year ends".
 
@@ -146,3 +146,14 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
 - Turf.js removed (only used for "is the square inside the area?"; now a small function). Libraries load with `defer`.
 - First visit (World, compressed): ~7.2 MB -> ~0.86 MB. Switching country: Brazil 8.2 MB -> 168 KB before it shows.
 - `python process_all.py --repack` converts old one-file JSONs; normal runs write the two files directly.
+
+---
+## 2026-11-15 · Stage 7 extra 2: one-page "Fire report" (print / PDF)
+- Button "🖨 Print report" (next to Copy link). Also works with Ctrl+P.
+- Report mode = class `report` on <html> (style.css, end of file): always light colours; one A4 page with
+  header (place, area, dates, "made" time UTC, data up to), summary + exchange rate, the 8 key cards,
+  map (left) + calendar (right), "how to read it", data sources, NASA FIRMS acknowledgement, link to this exact view.
+- The button waits for the map pictures (max 4 s) before the print window. Afterwards ("afterprint") the page goes
+  back: same theme, same map view. In the report the map fits the area / country / whole world.
+- Tests (Chrome): World and Uzbekistan + drawn box, dark theme: page height 967 / 942 px (A4 holds ~1054 px);
+  right place/area/dates/numbers; after printing theme dark + map view restored; no console errors.

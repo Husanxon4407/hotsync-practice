@@ -28,6 +28,7 @@ On the website you can:
   (click a dot), and NASA **satellite pictures** (burned land looks reddish in MODIS 7-2-1);
 - see the **proof** that the conversion works, the cleaning steps and the honest **limits**;
 - **download** the monthly numbers as CSV and **share a link** to exactly what you see.
+- **print a one-page fire report** (or save it as PDF) of your place, area and dates, for meetings.
 
 ## How it works (the method, in simple words)
 

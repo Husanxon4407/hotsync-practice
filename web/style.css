@@ -630,3 +630,97 @@ h3 { font-size: 14px; margin: 0 0 10px; font-weight: 650; }
   html { scroll-behavior: auto; }
   .reveal { opacity: 1; transform: none; }
 }
+
+/* ================================================================
+   PRINT REPORT (Stage 7, extra 2)
+   app.js puts the class "report" on <html> before printing (button or
+   Ctrl+P) and light colours on. One A4 page: header, summary, key cards,
+   map, calendar, sources. The same rules work on screen = a preview.
+   ================================================================ */
+.report-only { display: none; }
+html.report .report-only { display: block; }
+html.report body { background: #fff; overflow: visible; }
+html.report body::before, html.report body::after { display: none; }
+html.report header.top, html.report .controls, html.report #where .side-card,
+html.report #proof, html.report #day, html.report #numbers, html.report #how,
+html.report #limits, html.report #sources, html.report footer, html.report .tip,
+html.report .toast, html.report .hero .what, html.report .card-head .hint,
+html.report #calSeg, html.report .leaflet-control-container, html.report #error,
+html.report .map-msg, html.report #kBusyDayCard .s .link { display: none !important; }
+html.report main { max-width: 190mm; padding: 0; gap: 7px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+html.report main > * { grid-column: 1 / -1; }
+html.report main > #where { grid-column: 1; }       /* map left ... */
+html.report main > #calendar { grid-column: 2; }    /* ... calendar right */
+html.report #where > .card { height: 100%; }
+html.report .row-label { font-size: 9.5px; margin: 2px 0 -3px; }
+html.report #calNote { display: none; }
+html.report .kpi .q { display: none; }
+html.report .reveal { opacity: 1; transform: none; transition: none; }
+html.report *, html.report *::before, html.report *::after { animation: none !important; transition: none !important; }
+html.report .card { background: #fff; border: 1px solid #d9dbe3; border-radius: 8px; box-shadow: none;
+  backdrop-filter: none; -webkit-backdrop-filter: none; padding: 8px 11px; break-inside: avoid; }
+html.report .prism::before, html.report .card.lift.prism-hover::before { display: none; }
+html.report .card-head { margin-bottom: 5px; }
+html.report .card-head h2 { font-size: 13px; }
+html.report .num { transform: scale(.85); }
+
+/* header */
+html.report .report-head { border-bottom: 2px solid #111; padding-bottom: 5px; }
+.rh-top { display: flex; align-items: center; gap: 10px; }
+.rh-top img { width: 30px; height: 30px; }
+.rh-brand { font-size: 17px; font-weight: 800; letter-spacing: -.01em; }
+.rh-sub { font-size: 10.5px; color: #555; }
+.rh-meta { margin-left: auto; text-align: right; font-size: 10px; color: #555; line-height: 1.35; }
+.rh-line { margin-top: 5px; font-size: 11.5px; }
+
+/* summary + exchange rate */
+html.report .hero { grid-template-columns: minmax(0, 1fr) 230px; gap: 12px; padding: 9px 12px; }
+html.report .hero .kicker { display: none; }
+html.report .hero h1 { font-size: 17px; margin: 0 0 4px; }
+html.report #summary { font-size: 11px; line-height: 1.4; margin: 0; }
+html.report .exchange { gap: 3px; }
+html.report .exchange .eq { gap: 6px; }
+html.report .ex-ring { width: 18px; height: 18px; border-width: 2px; box-shadow: none; }
+html.report .ex-sign { font-size: 15px; }
+html.report .ex-dots { gap: 3px; min-height: 18px; }
+html.report .ex-dot { width: 11px; height: 11px; }
+html.report .ex-num { font-size: 22px; }
+html.report .ex-cap { font-size: 8.5px; line-height: 1.3; }
+
+/* key cards: 2 rows of 4 */
+html.report .kpis { gap: 6px; }
+html.report .kpi { padding: 6px 8px; gap: 6px; }
+html.report .kpi .ico { width: 22px; height: 22px; border-radius: 6px; }
+html.report .kpi .ico svg { width: 13px; height: 13px; }
+html.report .kpi .t { font-size: 9px; }
+html.report .kpi .t button, html.report .kpi .t .info { display: none; }
+html.report .kpi .n { font-size: 15px; }
+html.report .kpi .n.small-n { font-size: 12px; }
+html.report .kpi .s { font-size: 8.5px; line-height: 1.3; }
+
+/* map */
+html.report #where { display: block; }
+html.report #map { height: 84mm; border-radius: 6px; }
+html.report .legend { font-size: 9px; gap: 8px; margin-top: 4px; }
+
+/* calendar: small cells so all years fit */
+html.report .cal-scroll { overflow: visible; padding: 0; }
+html.report .cal { min-width: 0; grid-template-columns: 22px repeat(12, minmax(0, 1fr)); gap: 1px; font-size: 6.5px; }
+html.report .cal .rl { font-size: 6.5px; }
+html.report .cal .c { height: 10.5px; border-radius: 2px; font-size: 5.6px; line-height: 10.5px; letter-spacing: -.02em; }
+html.report .cal .c.partial::after, html.report .cal .c.terra::after { width: 4px; height: 4px; top: 1px; right: 1px; border-width: 1px; }
+html.report .cal .c.sel { box-shadow: none; }
+html.report .scale { font-size: 7.5px; margin-top: 4px; gap: 2px 6px; line-height: 1.3; }
+html.report .scale .s, html.report .scale .ramp i { height: 8px; width: 12px; }
+
+/* sources */
+html.report .report-foot { font-size: 8.5px; line-height: 1.35; color: #333; border-top: 1px solid #bbb; padding-top: 4px; }
+html.report .report-foot p { margin: 0 0 3px; }
+html.report .report-foot .ack { font-size: 7.5px; color: #555; }
+.rh-link { word-break: break-all; }
+
+@media print {
+  @page { size: A4 portrait; margin: 9mm; }
+  html.report main { max-width: none; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

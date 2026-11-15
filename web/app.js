@@ -312,6 +312,67 @@ function insideShape(x, y, geom) {
   return false;
 }
 
+// ------------------------------------------------------------------ PRINT REPORT (Stage 7, extra 2)
+// "Report mode" = the class "report" on <html> (see style.css): light colours,
+// one page with the header, summary, key cards, map, calendar and sources.
+// The button waits for the map pictures, then opens the print window
+// (where "Save as PDF" is also offered). Ctrl+P gets the same layout.
+let baseTiles = null, reportSaved = null;
+
+function enterReport() {
+  if (reportSaved || !state.c) return;
+  const root = document.documentElement;
+  reportSaved = { theme: root.dataset.theme, center: map.getCenter(), zoom: map.getZoom() };
+  writeHash();                               // the link printed on the page
+  const made = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const c = state.c, last = c.lastComplete || c.months[c.months.length - 1];
+  $("rhMeta").innerHTML = `Made ${made} UTC<br>Data up to ${last}`;
+  $("rhLine").innerHTML = `<b>Place:</b> ${c.name} &nbsp;·&nbsp; <b>Area:</b> ${state.area ? state.area.label : isWorld() ? "Whole world" : "Whole country"}` +
+    ` &nbsp;·&nbsp; <b>Dates:</b> ${monthShort(state.from)} – ${monthShort(state.to)}`;
+  $("rhLink").textContent = location.href;
+  root.dataset.theme = "light";              // paper is white (not saved as the user's choice)
+  root.classList.add("report");
+  map.invalidateSize();                      // the map box changed size
+  map.options.zoomSnap = 0;                  // any zoom, so the place fills the small map
+  if (state.area) map.fitBounds(state.area.layer.getBounds(), { padding: [8, 8], animate: false });
+  else if (isWorld()) map.fitBounds([[-56, -168], [76, 178]], { animate: false });   // the whole planet
+  else fitCountry();
+  recolor();
+}
+
+function exitReport() {
+  if (!reportSaved) return;
+  const s = reportSaved, root = document.documentElement;
+  reportSaved = null;
+  root.classList.remove("report");
+  if (s.theme) root.dataset.theme = s.theme; else delete root.dataset.theme;
+  map.options.zoomSnap = 0.5;
+  map.invalidateSize();
+  map.setView(s.center, s.zoom, { animate: false });   // back to the user's own view
+  recolor();
+  document.querySelectorAll(".seg").forEach(moveThumb);
+}
+
+async function printReport() {
+  if (!state.c) return;
+  enterReport();
+  setLoading("Preparing the report…");
+  // Wait for the street-map pictures of the new map size (at most 4 s).
+  await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
+  if (baseTiles && baseTiles.isLoading()) {
+    await new Promise((ok) => { baseTiles.once("load", ok); setTimeout(ok, 4000); });
+  }
+  setLoading("");
+  window.print();                            // "afterprint" puts the page back
+  // Backup, if a browser never sends "afterprint": the next click or key does it.
+  setTimeout(() => {
+    const back = () => { exitReport(); removeEventListener("pointerdown", back); removeEventListener("keydown", back); };
+    addEventListener("pointerdown", back); addEventListener("keydown", back);
+  }, 1000);
+}
+window.addEventListener("beforeprint", enterReport);
+window.addEventListener("afterprint", exitReport);
+
 // ------------------------------------------------------------------ CURRENT YEAR (Stage 6)
 // History 2000-2025 never changes. The current year comes from small files
 // that the robot (update_recent.py) refreshes, and we join them here.
@@ -574,6 +635,7 @@ async function start() {
     if (readHash()) location.reload();       // another shared link pasted in
   });
   $("shareBtn").addEventListener("click", copyLink);
+  $("printBtn").addEventListener("click", printReport);
   // Menu links scroll to their section WITHOUT replacing the shared link.
   document.querySelectorAll("nav.sections a").forEach((a) => a.addEventListener("click", (e) => {
     e.preventDefault();
@@ -1056,7 +1118,7 @@ function initMap() {
   map = L.map("map", { preferCanvas: true, zoomSnap: 0.5, worldCopyJump: true, scrollWheelZoom: false }).setView([41.4, 64.6], 5);
   map.on("click", () => map.scrollWheelZoom.enable());
   map.on("mouseout", () => map.scrollWheelZoom.disable());
-  L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  baseTiles = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
     maxZoom: 18,
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
   }).addTo(map);
@@ -1168,7 +1230,9 @@ function renderMap() {
     const full = state.gibs.on ? 0.35 : 0.85;
     rect.setStyle(k < 0 || off            // "None": hide the squares (see the picture)
       ? { fillOpacity: 0, opacity: 0 }
-      : { fillColor: SEQ[k], color: edge, opacity: inside ? 0.6 : 0.1, fillOpacity: inside ? full : 0.1 });
+      : reportSaved   // printed report: edges in the square's own colour (no white lines)
+        ? { fillColor: SEQ[k], color: SEQ[k], weight: 0.6, opacity: inside ? 1 : 0.1, fillOpacity: inside ? (state.gibs.on ? 0.35 : 1) : 0.1 }
+        : { fillColor: SEQ[k], color: edge, weight: 0.4, opacity: inside ? 0.6 : 0.1, fillOpacity: inside ? full : 0.1 });
   }
 
   // "The map shows ..." text
