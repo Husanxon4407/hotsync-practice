@@ -26,11 +26,13 @@
   --shadow-lift: 0 6px 18px rgba(60, 40, 20, .08);
 
   /* the one accent (controls, focus, active states) */
-  --ember: #ff6a1f;
-  --ember-text: #b4440a;   /* ember dark enough for small text on paper (5.5:1) */
-  --ember-soft: #ffb27a;
-  --ember-wash: rgba(255, 106, 31, .10);
-  --on-ember: #1a0c04;
+  /* the accent is now OCEAN BLUE, to match the Earth (the old names "ember"
+     stay, so no rule had to change). Data colours below are unchanged. */
+  --ember: #1769c4;
+  --ember-text: #155a9f;   /* dark enough for small text on paper */
+  --ember-soft: #8ec5f5;
+  --ember-wash: rgba(23, 105, 196, .10);
+  --on-ember: #ffffff;
   --live: #2fbf71;         /* green: only for the "live data" dot */
 
   /* series colours (identity) - data colours, unchanged:
@@ -38,8 +40,8 @@
   --modis: #e66100;
   --viirs: #5d3a9b;
   --harm: #1a9e75;
-  --brand: #b4440a;        /* old name, now = ember text */
-  --brand-solid: #ff6a1f;
+  --brand: #155a9f;        /* old name, now = accent text */
+  --brand-solid: #1769c4;
 
   /* calendar ramp (magnitude): one hue family, light -> dark */
   --r0: #efe8df;          /* 0 fires */
@@ -114,16 +116,16 @@
     --card-edge: rgba(255, 255, 255, .04);
     --shadow-card: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .32);
     --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .45);
-    --ember: #ff6a1f;
-    --ember-text: #ff8a4c;     /* ember for small text on charcoal */
-    --ember-soft: #ffb27a;
-    --ember-wash: rgba(255, 106, 31, .12);
-    --on-ember: #1a0c04;       /* text on an ember button */
+    --ember: #4aa8ff;
+    --ember-text: #7cc4ff;     /* accent for small text on dark */
+    --ember-soft: #a9d9ff;
+    --ember-wash: rgba(74, 168, 255, .12);
+    --on-ember: #04121f;       /* text on an accent button */
     --modis: #ff8a3d;
     --viirs: #a58be0;
     --harm: #22ad80;
-    --brand: #ff8a4c;
-    --brand-solid: #ff6a1f;
+    --brand: #7cc4ff;
+    --brand-solid: #4aa8ff;
     --r0: #2a2521;
     --r1: #7d3a1b;
     --r2: #ad4a20;
@@ -160,16 +162,16 @@
   --card-edge: rgba(255, 255, 255, .04);
   --shadow-card: 0 1px 2px rgba(0, 0, 0, .3), 0 10px 28px rgba(0, 0, 0, .32);
   --shadow-card-hover: 0 2px 4px rgba(0, 0, 0, .35), 0 18px 40px rgba(0, 0, 0, .45);
-  --ember: #ff6a1f;
-  --ember-text: #ff8a4c;     /* ember for small text on charcoal */
-  --ember-soft: #ffb27a;
-  --ember-wash: rgba(255, 106, 31, .12);
-  --on-ember: #1a0c04;       /* text on an ember button */
+  --ember: #4aa8ff;
+  --ember-text: #7cc4ff;     /* accent for small text on dark */
+  --ember-soft: #a9d9ff;
+  --ember-wash: rgba(74, 168, 255, .12);
+  --on-ember: #04121f;       /* text on an accent button */
   --modis: #ff8a3d;
   --viirs: #a58be0;
   --harm: #22ad80;
-  --brand: #ff8a4c;
-  --brand-solid: #ff6a1f;
+  --brand: #7cc4ff;
+  --brand-solid: #4aa8ff;
   --r0: #2a2521;
   --r1: #7d3a1b;
   --r2: #ad4a20;
@@ -399,7 +401,7 @@ h2 .num { font-size: 11px; font-weight: 700; color: #fff; background: var(--bran
 .hot-key { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; vertical-align: middle; }
 .hot-dot { display: inline-block; width: var(--d); height: var(--d); border-radius: 50%; box-shadow: 0 0 0 1px rgba(0, 0, 0, .25); }
 #map.map-earth .leaflet-control-attribution { background: rgba(10, 8, 6, .6); color: #c8bfb4; }
-#map.map-earth .leaflet-control-attribution a { color: #ffb27a; }
+#map.map-earth .leaflet-control-attribution a { color: #a9d9ff; }
 .leaflet-container { font: inherit; }
 /* Dark mode + "Streets" background: we keep the OpenStreetMap tiles but invert their colours
    (the NASA Earth picture is never inverted) */
@@ -862,7 +864,7 @@ html.no-scroll, html.no-scroll body { overflow: hidden; }
   background: #0d0b0a; color: #efe9e1; border: 1px solid #2e2924; border-radius: 8px;
   opacity: 0; transform: translate(-50%, -48%); transition: opacity .2s var(--ease), transform .2s var(--ease);
   --card-solid: #1c1916; --line: #2e2924; --line-strong: #3f3832; --ink: #efe9e1; --ink2: #c8bfb4; --muted: #9b9187;
-  --chip: #24201c; --ember-text: #ff8a4c;
+  --chip: #24201c; --ember-text: #7cc4ff;
 }
 .gmodal.open .gmodal-back { opacity: 1; }
 .gmodal.open .gmodal-box { opacity: 1; transform: translate(-50%, -50%); }
@@ -1100,7 +1102,7 @@ html.report .report-foot .ack { font-size: 7.5px; color: #555; }
 .map-time .play { padding: 5px 11px; font-size: 12.5px; min-width: 74px; justify-content: center; }
 .map-time input[type=range] { flex: 1 1 100px; min-width: 70px; accent-color: var(--ember); }
 .map-period { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.map-time .text-btn { color: #ffb27a; padding: 2px; }
+.map-time .text-btn { color: #a9d9ff; padding: 2px; }
 
 .map-right { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .map-bg.seg { background: rgba(255, 255, 255, .06); border-color: var(--glass-line); padding: 2px; }
@@ -1110,7 +1112,7 @@ html.report .report-foot .ack { font-size: 7.5px; color: #555; }
   display: inline-grid; place-items: center; width: 32px; height: 30px; border-radius: 5px;
   border: 1px solid var(--glass-line); background: rgba(255, 255, 255, .06); color: var(--glass-ink);
 }
-.map-full-btn:hover { border-color: var(--ember); color: #ffb27a; }
+.map-full-btn:hover { border-color: var(--ember); color: #a9d9ff; }
 .map-full-btn:active { transform: translateY(1px); }
 
 /* Leaflet's own buttons (zoom, drawing) go under the bar */
@@ -1491,3 +1493,6 @@ html.report .bg-scene { display: none !important; }
 }
 :root[data-theme="dark"] body { background: radial-gradient(ellipse at 65% 40%, #10243c 0%, #050f20 45%, #020914 80%) fixed; }
 html.report body { background: #fff !important; }
+
+/* the flame in the small picker bar stays fire-coloured */
+.pick-flame { color: #ff6a1f; }

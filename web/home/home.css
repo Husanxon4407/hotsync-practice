@@ -213,14 +213,14 @@ html.map-open, html.map-open body { overflow: hidden; background: #141210; }
 .step-num {
   position: absolute; top: 20px; right: 20px; width: 30px; height: 30px; border-radius: 50%;
   display: grid; place-items: center; font-family: var(--mono); font-weight: 600; font-size: 13px;
-  background: #fff; border: 1px solid var(--sum-line); color: var(--fire);
+  background: #fff; border: 1px solid var(--sum-line); color: var(--cool);
 }
 .step-ico { width: 34px; height: 34px; fill: none; stroke: var(--cool); stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .rate-chip {
   display: inline-flex; gap: 6px; align-items: baseline; margin-top: 18px; padding: 9px 16px; border-radius: 40px;
-  background: #fff3e8; color: var(--sum-text); font-size: 14px; font-weight: 600; border: 1px solid #ffd9bb;
+  background: #eaf4ff; color: var(--sum-text); font-size: 14px; font-weight: 600; border: 1px solid #c5e0fb;
 }
-.rate-chip b { font-family: var(--mono); color: var(--fire); }
+.rate-chip b { font-family: var(--mono); color: var(--cool); }
 
 /* call to action */
 .cta { text-align: center; padding: clamp(40px, 6vw, 64px) 0 clamp(56px, 8vw, 96px); }

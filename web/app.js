@@ -1534,7 +1534,7 @@ async function drawBorders() {
     { pane: "mask", interactive: false, stroke: false, fillColor: "#0b0908", fillOpacity: state.bg === "streets" ? 0.45 : 0.68 });
   const rings = polys.map((pg) => pg.map(ll));
   const halo = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: "#000", weight: 4.5, opacity: 0.4 });
-  const line = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: state.bg === "streets" ? "#c2410c" : "#ff8a4c", weight: 2, opacity: 1 });
+  const line = L.polygon(rings, { pane: "borders", interactive: false, fill: false, color: state.bg === "streets" ? "#1769c4" : "#7cc4ff", weight: 2, opacity: 1 });   // ocean-blue country border
   focusLayer = L.layerGroup([mask, halo, line]).addTo(map);
 }
 

@@ -202,7 +202,7 @@
         .backgroundColor("rgba(0,0,0,0)")
         .globeImageUrl(IMG + "earth-blue-marble.jpg")
         .bumpImageUrl(IMG + "earth-topology.png")
-        .showAtmosphere(true).atmosphereColor("#ffb27a").atmosphereAltitude(0.13)
+        .showAtmosphere(true).atmosphereColor("#a9d9ff").atmosphereAltitude(0.13)
         .polygonsData(feats)
         .polygonSideColor(() => "rgba(20, 18, 16, 0.35)")
         .polygonStrokeColor(() => "rgba(255, 245, 235, 0.45)")

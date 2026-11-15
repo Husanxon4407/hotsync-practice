@@ -246,3 +246,7 @@ fire-season clock, calendar PNG download, 3D globe intro, English/Uzbek switch.
 - Update (user): the map page now looks like the home page: deep-space gradient + stars, the same Earth lights,
   bigger planet on the right (partly off screen), no ember glow. Cards 91% opaque so the data stays in focus.
   Home page: the dark-to-white gap between the hero and the summary is removed.
+- Update (user): the page accent is now ocean blue (buttons, links, tabs, badges, focus, country border,
+  globe-picker glow) to match the Earth: light #1769c4 / text #155a9f, dark #4aa8ff / text #7cc4ff.
+  Data colours unchanged (fire dots, calendar ramp, MODIS orange, VIIRS purple, fair count). Home: step numbers
+  and the rate chip are blue too.
