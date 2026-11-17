@@ -1676,6 +1676,18 @@
 "modis": "MODIS_NRT",
 "viirs": "VIIRS_NOAA20_NRT",
 "viirs_sat": "NOAA20",
-"fetched_at": "2026-11-15T11:00:04Z"
+"fetched_at": "2026-11-17T11:57:07Z"
+},
+"2026-11-16": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT",
+"viirs_sat": "NOAA20",
+"fetched_at": "2026-11-17T11:57:07Z"
+},
+"2026-11-17": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT",
+"viirs_sat": "NOAA20",
+"fetched_at": "2026-11-17T11:57:07Z"
 }
 }
