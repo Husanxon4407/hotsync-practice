@@ -1698,8 +1698,20 @@
 },
 "2026-11-19": {
 "modis": "MODIS_NRT",
-"viirs": null,
-"viirs_sat": "SNPP",
-"fetched_at": "2026-11-19T11:45:28Z"
+"viirs": "VIIRS_NOAA20_NRT",
+"viirs_sat": "NOAA20",
+"fetched_at": "2026-11-21T11:11:06Z"
+},
+"2026-11-20": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT",
+"viirs_sat": "NOAA20",
+"fetched_at": "2026-11-21T11:11:07Z"
+},
+"2026-11-21": {
+"modis": "MODIS_NRT",
+"viirs": "VIIRS_NOAA20_NRT",
+"viirs_sat": "NOAA20",
+"fetched_at": "2026-11-21T11:11:07Z"
 }
 }
